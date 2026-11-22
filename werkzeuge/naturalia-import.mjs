@@ -26,16 +26,20 @@ const KAPITEL = [
 ];
 
 const hilfen = readFileSync(join(QUELLE, 'src/helpers.js'), 'utf8');
+// Hilfsfunktionen der Naturalia-Engine, die die Simulationen brauchen ($id, sl, brow, nf, reduced, tween …)
+const engine = readFileSync(join(QUELLE, 'src/engine.js'), 'utf8');
+const simHilfen = engine.slice(0, engine.indexOf('/* ---------- Speicher'));
 for (const [id, titel, kapitel] of KAPITEL) {
   const kapitelCode = readFileSync(join(QUELLE, `src/chapters/${id}.js`), 'utf8');
   const out = `// AUTOMATISCH ERZEUGT mit werkzeuge/naturalia-import.mjs aus fantasy-lernapp/src/chapters/${id}.js
-// Nicht von Hand ändern. Simulationen (SIMS) sind enthalten, werden vom Motor in Version 1 aber nicht genutzt.
+// Nicht von Hand ändern. Simulationen (SIMS) werden im Browser mit simulationen[id](element) gestartet.
 import { ausNaturalia } from './naturalia-adapter.js';
 
 ${hilfen}
+${simHilfen}
 ${kapitelCode}
 
-export default ausNaturalia({ STATIONS, TOPIC }, ${JSON.stringify({ id, titel, kapitel })});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, titel, kapitel })});
 `;
   writeFileSync(join(ZIEL, `${id}.js`), out);
   console.log('geschrieben: pakete/' + id + '.js');

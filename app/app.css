@@ -39,3 +39,5 @@ textarea.txtin { min-height: 120px; }
 @media (max-width: 420px) { .zrow { grid-template-columns: 1fr; } }
 label.einst, .einst label { flex-wrap: wrap; }
 label.einst select, .einst select { flex: 1 1 12rem; min-width: 0; width: 100%; max-width: 100%; font: inherit; min-height: 44px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.simbox { border: 2px solid var(--line-soft); border-radius: var(--radius-md); padding: var(--space-3); margin: var(--space-4) 0; background: var(--surface); }
+.simbox .simhost { margin-top: var(--space-3); max-width: 100%; overflow-x: auto; }

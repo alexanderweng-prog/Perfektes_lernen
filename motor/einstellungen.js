@@ -10,7 +10,8 @@ export const EINSTELLUNGEN = Object.freeze({
   blockMaxAufgaben: 15,       // Annahme: 15–20 Aufgaben bzw. ca. 10 Minuten
   blockMaxMinuten: 10,        // Annahme
   blockMaxNeueLernziele: 2,   // Annahme: ein neues Lernziel kostet drei Schritte (Beispiel, mit Hilfe, ohne Hilfe)
-  zusatzMaxNeueLernziele: 3,  // freiwilliger Zusatzblock: nur Neues
+  zusatzMaxNeueLernziele: 3,  // freiwilliger Zusatzblock: Neues …
+  zusatzMaxSimulationen: 3,   // … und Simulationen mit Frage (nur im Zusatzblock, Annahme)
 
   // Fading und Fehler
   abstandFading: 2,           // mind. so viele andere Aufgaben zwischen den Fading-Schritten
@@ -38,6 +39,6 @@ export const EINSTELLUNGEN = Object.freeze({
   sitztAbStabilitaetTage: 7,  // Annahme: «sitzt», wenn die Erinnerung mind. eine Woche hält
 
   // Belohnungen
-  xp: { faellig: 10, neu: 8, mitHilfe: 4, nochmals: 3, blockFertig: 20 },
+  xp: { faellig: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, blockFertig: 20 },
   bonusWahrscheinlichkeit: 0.25 // variable Belohnung nach einer Sitzung
 });

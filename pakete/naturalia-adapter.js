@@ -7,7 +7,7 @@
 const slug = s => s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
-export function ausNaturalia({ STATIONS, TOPIC }, { id, titel, kapitel, pruefstatus = 'geprueft' }) {
+export function ausNaturalia({ STATIONS, TOPIC, SIMS = {} }, { id, titel, kapitel, pruefstatus = 'geprueft' }) {
   const kompetenzen = [], lernziele = [], aufgaben = [];
   for (const s of STATIONS) {
     const kId = `${id}.${s.id}`;
@@ -37,8 +37,23 @@ export function ausNaturalia({ STATIONS, TOPIC }, { id, titel, kapitel, pruefsta
         erzeuge: () => wandle(t.make())
       });
     }
+    // Simulationen: Karte mit sim → das Lernziel derselben Station, dessen Lernkarte am nächsten davor (sonst danach) liegt
+    const karten = s.lesson || [];
+    karten.forEach((c, i) => {
+      if (!c.sim || !SIMS[c.sim]) return;
+      let lzId = null;
+      for (let d = 0; d < karten.length && !lzId; d++) {
+        for (const j of [i - d, i + d]) { if (j >= 0 && j < karten.length && lzVon.has(karten[j].h)) { lzId = lzVon.get(karten[j].h); break; } }
+      }
+      const lz = lernziele.find(l => l.id === lzId);
+      if (!lz) return;
+      lz.simulationen = lz.simulationen || [];
+      if (!lz.simulationen.some(x => x.id === c.sim)) lz.simulationen.push({ id: c.sim, titel: c.h, html: c.body || '' });
+    });
   }
-  return { id, titel, fach: 'NuT', version: 1, kompetenzen, lernziele, aufgaben, formeln: TOPIC.formulas || [] };
+  const simulationen = {};
+  for (const [k, f] of Object.entries(SIMS)) simulationen[k] = f;
+  return { id, titel, fach: 'NuT', version: 1, kompetenzen, lernziele, aufgaben, simulationen, formeln: TOPIC.formulas || [] };
 }
 
 function wandle(d) {
