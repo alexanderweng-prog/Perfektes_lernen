@@ -53,7 +53,8 @@ export function pruefePaket(paket, { durchlaeufe = 20 } = {}) {
     if (!a.variantengruppe) f.push(`${wo}: Variantengruppe fehlt`);
     if (!a.quelle) f.push(`${wo}: Quelle fehlt`);
     if (!PRUEFSTATUS.includes(a.pruefstatus)) f.push(`${wo}: Prüfstatus ${a.pruefstatus} ungültig`);
-    if (a.pruefstatus === 'geprueft') proLernziel.set(a.lernziel, (proLernziel.get(a.lernziel) || 0) + 1);
+    if (a.simulation && !(paket.simulationen && typeof paket.simulationen[a.simulation] === 'function')) f.push(`${wo}: Simulation ${a.simulation} fehlt im Paket`);
+    if (a.pruefstatus === 'geprueft' && !a.simulation) proLernziel.set(a.lernziel, (proLernziel.get(a.lernziel) || 0) + 1);
     const n = typeof a.erzeuge === 'function' ? durchlaeufe : 1;
     for (let k = 0; k < n; k++) {
       let i;

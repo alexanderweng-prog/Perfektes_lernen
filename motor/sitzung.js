@@ -6,7 +6,7 @@
 // - Pausenhinweis, wenn die Fehlerquote deutlich über dem eigenen Schnitt der Sitzung liegt.
 
 import { EINSTELLUNGEN as E } from './einstellungen.js';
-import { instanz } from './format.js';
+import { instanz, mischen } from './format.js';
 import { bewerte } from './bewerten.js';
 import { istNeu, istFaellig, abrufWahrscheinlichkeit, verbuche, eintrag } from './schuelermodell.js';
 
@@ -29,8 +29,11 @@ export function zaehleFaellige(paket, modell, { jetzt = new Date(), freigabe } =
   return freigegebeneLernziele(paket, freigabe).filter(l => istFaellig(modell, l.id, jetzt)).length;
 }
 
-export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], zufall = Math.random } = {}) {
-  const alle = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft');
+// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb
+export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], zufall = Math.random, simulation = false } = {}) {
+  const geprueft = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft');
+  const passend = geprueft.filter(a => !!a.simulation === simulation);
+  const alle = passend.length ? passend : geprueft;
   const andere = alle.filter(a => !ohneGruppen.includes(a.variantengruppe));
   const pool = andere.length ? andere : alle;
   const abstand = a => Math.abs(a.schwierigkeit - niveau);
@@ -76,6 +79,14 @@ export class Sitzung {
     neu.forEach((l, k) => {
       offen.push({ lernziel: l.id, phase: 'beispiel', bereitAb: versatz + k * 3, folgt: 'mitHilfe' });
     });
+    if (this.art === 'zusatz') {
+      // Simulationen mit Frage: bevorzugt Lernziele, die das Kind schon kennt, sonst die neuen dieser Runde
+      const mitSim = new Set(this.paket.aufgaben.filter(a => a.simulation && a.pruefstatus === 'geprueft').map(a => a.lernziel));
+      const kandidaten = lz.filter(l => mitSim.has(l.id));
+      const bekannt = kandidaten.filter(l => !istNeu(this.modell, l.id));
+      const auswahl = [...mischen(bekannt, this.zufall), ...kandidaten.filter(l => neu.includes(l))].slice(0, E.zusatzMaxSimulationen);
+      auswahl.forEach((l, k) => offen.push({ lernziel: l.id, phase: 'simulation', bereitAb: neu.includes(l) ? 99 : 1 + k * 2 }));
+    }
     return offen;
   }
 
@@ -107,7 +118,7 @@ export class Sitzung {
     const benutzt = this.gruppenInSitzung.get(schritt.lernziel) || [];
     const e = eintrag(this.modell, schritt.lernziel);
     const ohneGruppen = [...benutzt, ...(e && e.letzteGruppe ? [e.letzteGruppe] : [])];
-    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, zufall: this.zufall });
+    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
     this.gruppenInSitzung.set(schritt.lernziel, [...benutzt, aufgabe.variantengruppe]);
     const abruf = schritt.phase === 'faellig' || schritt.phase === 'neu';
     this.aktuell = {

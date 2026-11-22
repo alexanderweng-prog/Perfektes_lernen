@@ -53,10 +53,14 @@ Alle Zahlen sind Annahmen und im Pilot anzupassen.
 
 - 660 Erklärungen zu falschen Antwortoptionen (alle 220 Multiple-Choice-Aufgaben aus Naturalia).
 - 138 neue Aufgabenvarianten, sodass jedes der 201 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
+- 56 Fragen zu den Naturalia-Simulationen («Simulation mit Frage», nur im freiwilligen Zusatzblock).
 - Alles ist Entwurf, bis eine Lehrperson es im Dashboard unter «Neue Inhalte prüfen» freigibt.
+
+## Simulationen
+
+Die 56 Simulationen aus Naturalia werden mit importiert und je einem Lernziel zugeordnet. Sie erscheinen im Schritt «Beispiel» unter der Lernkarte und im Zusatzblock als «Simulation mit Frage» (höchstens 3 pro Zusatzblock, `zusatzMaxSimulationen`). Antworten dazu zählen für XP und Dashboard, verändern aber den Wiederholungsplan nicht.
 
 ## Noch offen
 
-- Simulationen als Aufgabentyp.
 - Pilot mit einer Klasse (4–6 Wochen), danach Parameter in `motor/einstellungen.js` anpassen.
 - Kanti-Trainer und Mathe als Pakete.

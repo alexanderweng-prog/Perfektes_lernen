@@ -1,5 +1,5 @@
 // AUTOMATISCH ERZEUGT mit werkzeuge/naturalia-import.mjs aus fantasy-lernapp/src/chapters/nt8-5.js
-// Nicht von Hand ändern. Simulationen (SIMS) sind enthalten, werden vom Motor in Version 1 aber nicht genutzt.
+// Nicht von Hand ändern. Simulationen (SIMS) werden im Browser mit simulationen[id](element) gestartet.
 import { ausNaturalia } from './naturalia-adapter.js';
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -41,6 +41,26 @@ const num = (q, unit, ans, hint, explain, o) =>
   Object.assign({ type: 'num', q, unit, ans, hint, explain, tolRel: 0.01, tolAbs: 0 }, o || {});
 // MC: options[0] ist die richtige Antwort, gemischt wird beim Anzeigen
 const mc = (q, options, explain) => ({ type: 'mc', q, options, explain });
+
+const $id = id => document.getElementById(id);
+const nextFrame = f => requestAnimationFrame(() => requestAnimationFrame(f));
+const nf = (host, f) => nextFrame(() => { if (host.isConnected) f(); });
+const reduced = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const sl = (id, label, min, max, step, val, unit) =>
+  `<label class="sl"><span class="sll">${label}: <b class="mono" id="${id}v"></b> ${unit}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></label>`;
+const brow = (name, id, vid) =>
+  `<div class="brow"><span class="bname">${name}</span><div class="btrack"><div class="bfill" id="${id}"></div></div><b class="mono bval" id="${vid}"></b></div>`;
+// Zahl weich hochzählen lassen
+function tween(from, to, ms, cb) {
+  if (reduced() || from === to) { cb(to); return; }
+  const t0 = performance.now();
+  (function step(t) {
+    const p = Math.min(1, (t - t0) / ms);
+    cb(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
 
 /* ---------- Inhalt: 8_5 Kräfte, Arbeit und Leistung erforschen, 6 Stationen mit je 6 Aufgabenvorlagen ---------- */
 const r2 = x => Math.round(x * 1000) / 1000;
@@ -546,4 +566,4 @@ const SIMS = {
 
 
 
-export default ausNaturalia({ STATIONS, TOPIC }, {"id":"nt8-5","titel":"Kräfte, Arbeit und Leistung erforschen","kapitel":"NaTech 8, Kapitel 5"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-5","titel":"Kräfte, Arbeit und Leistung erforschen","kapitel":"NaTech 8, Kapitel 5"});

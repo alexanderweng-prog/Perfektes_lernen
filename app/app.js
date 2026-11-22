@@ -12,7 +12,7 @@ import { KATALOG } from '../pakete/katalog.js';
 
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
 const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
-const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals, andere Variante' };
+const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals, andere Variante', simulation: 'Simulation' };
 const STATUS = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt' };
 
 const $app = document.getElementById('app');
@@ -144,6 +144,15 @@ function eingabeHtml(a, gesperrt) {
   }
 }
 
+// Simulationen aus Naturalia. Pro Bildschirm läuft genau eine (sie nutzen feste Element-IDs).
+function simHtml(lz, id) {
+  const sims = lz.simulationen || [];
+  const s = sims.find(x => x.id === id) || sims[0];
+  if (!s) return '';
+  const knoepfe = sims.length > 1 ? `<div class="btnrow" role="group" aria-label="Simulation wählen">${sims.map(x => `<button class="btn sm${x.id === s.id ? ' btn-primary' : ''}" data-act="simWahl" data-sim="${x.id}">${esc(x.titel)}</button>`).join('')}</div>` : '';
+  return `<div class="simbox"><div class="tag">Simulation: ${esc(s.titel)}</div>${s.html ? `<div class="lbody">${s.html}</div>` : ''}${knoepfe}<div class="simhost" data-sim="${s.id}"></div></div>`;
+}
+
 function beispielHtml(a) {
   const k = a.lernziel.lernkarte, i = a.instanz;
   const worked = k && k.beispiel ? `<div class="worked"><div class="wgiven">${k.beispiel.given}</div><ol class="wsteps">${k.beispiel.steps.map(s => `<li><div><b>${s[0]}</b><br>${s[1]}</div></li>`).join('')}</ol></div>` : '';
@@ -151,6 +160,7 @@ function beispielHtml(a) {
   return `<div class="tag">Neu: ${esc(a.lernziel.titel)}</div>
     ${k && k.html ? `<div class="lbody">${k.html}</div>` : ''}${worked}
     <div class="worked"><div class="wgiven"><b>Vorgerechnet:</b> ${i.text}</div>${loes}<div class="lbody">${i.erklaerung || ''}</div></div>
+    ${simHtml(a.lernziel, ui.simWahl)}
     <p class="small">Lies das Beispiel genau. Gleich kommt eine ähnliche Aufgabe.</p>
     <button class="btn btn-primary block" data-act="weiter">Verstanden, weiter</button>`;
 }
@@ -181,7 +191,8 @@ function rundeHtml() {
         <div class="fbt">${ui.ergebnis.richtig ? 'Richtig.' : ui.ergebnis.punkte > 0 ? 'Teilweise richtig.' : 'Nicht ganz.'}${ui.ergebnis.xp ? ` <span class="mono">+${ui.ergebnis.xp} XP</span>` : ''}</div>
         <div class="fbb">${ui.ergebnis.richtig ? '' : `Richtig wäre: <b>${ui.ergebnis.loesung}</b><br>`}${ui.ergebnis.erklaerung || ''}${!ui.ergebnis.richtig ? '<br><br>Dieses Lernziel kommt bald nochmals, in anderer Form.' : ''}</div></div>
         <button class="btn btn-primary block" data-act="weiter" id="weiterBtn">Weiter</button>` : '';
-    inhalt = `<section class="card"><p class="small">${esc(a.lernziel.titel)}</p><div class="q">${a.instanz.text}</div>
+    const simZuerst = a.aufgabe.simulation ? simHtml({ simulationen: (a.lernziel.simulationen || []).filter(x => x.id === a.aufgabe.simulation) }) : '';
+    inhalt = `<section class="card"><p class="small">${esc(a.lernziel.titel)}</p>${simZuerst}<div class="q">${a.instanz.text}</div>
       ${a.zeigeHilfe ? hilfeHtml(a) : ''}${eingabeHtml(a, fertig || ui.frageSicherheit)}${sicherheit}${fb}${erg}</section>`;
   }
   return `${kopf(sitzung.art === 'block' ? 'Wiederholungsblock' : 'Zusatzblock', '', `<button class="btn sm" data-act="ende">Beenden</button>`)}
@@ -191,7 +202,8 @@ function rundeHtml() {
 function endeHtml() {
   const z = ui.zusammenfassung;
   const jetzt = new Date();
-  const neuUebrig = freigegebeneLernziele(paket, daten.freigabe).filter(l => istNeu(daten.modell, l.id)).length;
+  const neuUebrig = freigegebeneLernziele(paket, daten.freigabe).filter(l => istNeu(daten.modell, l.id)).length
+    + paket.aufgaben.filter(x => x.simulation && x.pruefstatus === 'geprueft').length;
   const titel = z.art === 'block' ? (z.abgebrochenNachPause ? 'Gute Entscheidung: Pause.' : 'Block abgeschlossen.') : 'Zusatzblock fertig.';
   return `${kopf(titel, '')}
   <main class="wrap"><div class="stack-v">
@@ -200,7 +212,7 @@ function endeHtml() {
       ${stufeHtml()}</section>
     ${ui.bonus ? `<section class="card"><div class="bonus">${ui.bonus.icon}</div><p><b>Bonus-Trophäe: ${esc(ui.bonus.name)}</b></p><p class="small">Bonus-Trophäen kommen ab und zu, einfach so.</p></section>` : ''}
     <section class="card"><div class="tag">Fällig beim nächsten Mal</div><p>${zaehleFaellige(paket, daten.modell, { jetzt: new Date(+jetzt + 86400000), freigabe: daten.freigabe })} Lernziele bis morgen.</p></section>
-    ${neuUebrig && !ui.speichert ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt nur Neues. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock: Neues lernen</button></section>` : ''}
+    ${neuUebrig && !ui.speichert ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt Neues und Simulationen. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock starten</button></section>` : ''}
     ${ui.speichert ? '<p class="small">Wird gespeichert …</p>' : syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)}</div></div>` : K.konto.modus === 'schule' ? '<p class="small">Gespeichert.</p>' : ''}
     ${K.konto.geteilt
       ? `<button class="btn btn-primary block" data-act="abmelden" ${ui.speichert ? 'disabled' : ''}>Fertig und abmelden</button><p class="small">Gemeinsames Gerät: Melde dich ab, damit das nächste Kind mit seinem eigenen Lernstand übt.</p><button class="btn block" data-act="start">Zur Übersicht</button>`
@@ -210,11 +222,23 @@ function endeHtml() {
 }
 
 function render() {
+  const laufend = $app.querySelector('.simhost[data-sim]');
   $app.innerHTML = !K.konto ? anmeldeHtml() : ui.seite === 'runde' ? rundeHtml() : ui.seite === 'ende' ? endeHtml() : startHtml();
+  starteSimulation(laufend);
   const f = document.getElementById('ein') || document.querySelector('[data-luecke]');
   if (f && !f.disabled) f.focus({ preventScroll: true });
   const w = document.getElementById('weiterBtn');
   if (w) w.focus({ preventScroll: true });
+}
+
+// Läuft dieselbe Simulation schon, wird sie übernommen (Regler bleiben stehen), sonst neu gestartet
+function starteSimulation(laufend) {
+  const host = $app.querySelector('.simhost[data-sim]');
+  if (!host || !paket || !paket.simulationen) return;
+  const id = host.dataset.sim;
+  if (laufend && laufend.dataset.sim === id && laufend.dataset.schritt === String(ui.simSchritt)) { host.replaceWith(laufend); return; }
+  host.dataset.schritt = String(ui.simSchritt);
+  try { paket.simulationen[id](host); } catch (e) { host.innerHTML = '<p class="small">Die Simulation konnte nicht gestartet werden.</p>'; }
 }
 
 /* ---------- Ablauf ---------- */
@@ -227,7 +251,7 @@ function starteSitzung(art) {
 function naechste() {
   const a = sitzung.naechster();
   if (!a) return beende();
-  ui = { seite: 'runde', frageSicherheit: false, sicherheitNoetig: a.fragSicherheit };
+  ui = { seite: 'runde', frageSicherheit: false, sicherheitNoetig: a.fragSicherheit, simSchritt: sitzung.pos };
   render(); scrollTo(0, 0);
 }
 
@@ -313,6 +337,7 @@ $app.addEventListener('click', e => {
   else if (act === 'pauseJa') { sitzung.nachPausenhinweis(true); beende(); }
   else if (act === 'pauseNein') { sitzung.nachPausenhinweis(false); ui.pause = false; naechste(); }
   else if (act === 'ende') beende();
+  else if (act === 'simWahl') { ui.simWahl = b.dataset.sim; render(); }
   else if (act === 'loeschen') { ui.loeschen = true; render(); }
   else if (act === 'loeschenNein') { ui.loeschen = false; render(); }
   else if (act === 'loeschenJa') loeschen();

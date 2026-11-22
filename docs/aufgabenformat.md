@@ -48,7 +48,7 @@ Statt der Antwortfelder kann eine Aufgabe `erzeuge()` haben, das ein Objekt mit 
 | `zuordnen` | `paare: [['Energie', 'Joule'], …]` | Teilpunkte |
 | `reihenfolge` | `elemente` in richtiger Reihenfolge | Teilpunkte (richtige Position) |
 | `erklaeren` | `musterantwort` | Version 1 ohne KI: Kind schreibt, sieht die Musterantwort und schätzt selbst ein (passt / teilweise / fehlt) |
-| `simulation` | noch nicht umgesetzt | Simulationen aus Naturalia sind in den Paketen enthalten, werden aber noch nicht gezeigt |
+| Simulation mit Frage | beliebige Aufgabe mit Feld `simulation: '<id>'` | Die Simulation des Pakets (`paket.simulationen[id]`) erscheint über der Frage. Nur im Zusatzblock. |
 
 ## Ablauf für neue Aufgaben
 

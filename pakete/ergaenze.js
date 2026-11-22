@@ -26,11 +26,20 @@ export function ergaenze(paket, erg, { freigaben = {}, alleFreigeben = false } =
   });
 
   for (const n of erg.aufgaben || []) {
-    const vorlage = paket.aufgaben.find(a => vorlageId(a) === n.wieVorlage);
-    if (!vorlage) throw new Error(`Ergänzung ${n.id}: Vorlage ${n.wieVorlage} gibt es im Paket ${paket.id} nicht`);
+    let vorlage = null, lernziel = null;
+    if (n.simulation) {
+      const lz = paket.lernziele.find(l => (l.simulationen || []).some(s => s.id === n.simulation));
+      if (!lz) throw new Error(`Ergänzung ${n.id}: Simulation ${n.simulation} gibt es im Paket ${paket.id} nicht`);
+      lernziel = lz.id;
+      vorlage = { thema: 'Simulation ' + lz.simulationen.find(s => s.id === n.simulation).titel, lernziel };
+    } else {
+      vorlage = paket.aufgaben.find(a => vorlageId(a) === n.wieVorlage);
+      if (!vorlage) throw new Error(`Ergänzung ${n.id}: Vorlage ${n.wieVorlage} gibt es im Paket ${paket.id} nicht`);
+      lernziel = vorlage.lernziel;
+    }
     const id = `${paket.id}.${n.id}`;
     const { wieVorlage, ...rest } = n;
-    const a = { ...rest, id, lernziel: vorlage.lernziel, variantengruppe: id, quelle: QUELLE_ERGAENZUNG, pruefstatus: status(id) };
+    const a = { ...rest, id, lernziel, variantengruppe: id, quelle: QUELLE_ERGAENZUNG, pruefstatus: status(id) };
     if (!a.typ && typeof a.erzeuge !== 'function') throw new Error(`Ergänzung ${n.id}: typ fehlt`);
     if (!a.typ) a.typ = a.erzeuge().typ;
     aufgaben.push(a);
@@ -42,6 +51,9 @@ export function ergaenze(paket, erg, { freigaben = {}, alleFreigeben = false } =
 
 export async function ladeErgaenzung(paketId) {
   if (!KATALOG.some(k => k.id === paketId)) return null;
-  try { return (await import(`./ergaenzungen/${paketId}.js`)).default; }
-  catch (e) { return null; }
+  let erg = null, sim = [];
+  try { erg = (await import(`./ergaenzungen/${paketId}.js`)).default; } catch (e) { /* keine Ergänzung */ }
+  try { sim = (await import('./ergaenzungen/simulationen.js')).default[paketId] || []; } catch (e) { /* keine Simulationsfragen */ }
+  if (!erg && !sim.length) return null;
+  return { erklaerungen: (erg && erg.erklaerungen) || {}, aufgaben: [...((erg && erg.aufgaben) || []), ...sim] };
 }

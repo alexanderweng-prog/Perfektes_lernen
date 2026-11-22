@@ -245,3 +245,26 @@ test('Ergänzungen: ohne Freigabe Entwurf, nach Freigabe in Umlauf, zurückgezog
   assert.equal(mit.aufgaben.find(a => a.id === 'leistung.s3-mensch-v3').pruefstatus, 'zurueckgezogen');
   assert.ok(instanz(mit.aufgaben.find(a => a.id === 'leistung.s1-richtung')).optionen.filter(o => !o.richtig).every(o => o.erklaerung));
 });
+
+test('Simulationen: nur im Zusatzblock, nie im Wiederholungsblock', async () => {
+  const roh = (await import('../pakete/leistung.js')).default;
+  const p = ergaenze(roh, await ladeErgaenzung('leistung'), { alleFreigeben: true });
+  assert.equal(Object.keys(p.simulationen).length, 9);
+  // Block: keine Aufgabe mit Simulation
+  let m = leeresModell('leistung');
+  for (const l of p.lernziele) m = verbuche(m, l.id, { punkte: 1 }, t0);
+  const block = new Sitzung(p, m, { uhr: () => new Date(+t0 + 60 * TAG) });
+  let a;
+  while ((a = block.naechster())) { assert.ok(!a.aufgabe.simulation, 'Simulation im Block'); block.antworte(a.instanz.typ === 'mc' ? richtigeNr(a.instanz) : String(a.instanz.wert)); }
+  // Zusatz: Simulationsschritte vorhanden und mit passender Aufgabe
+  const zusatz = new Sitzung(p, m, { art: 'zusatz', uhr: () => new Date(+t0 + 60 * TAG) });
+  const sims = [];
+  while ((a = zusatz.naechster())) {
+    if (a.schritt.phase === 'simulation') { sims.push(a); assert.ok(a.aufgabe.simulation); assert.ok((a.lernziel.simulationen || []).some(s => s.id === a.aufgabe.simulation)); }
+    if (a.schritt.phase === 'beispiel') zusatz.weiter(); else zusatz.antworte(a.instanz.typ === 'mc' ? richtigeNr(a.instanz) : String(a.instanz.wert));
+  }
+  assert.equal(sims.length, E.zusatzMaxSimulationen);
+  // Simulationsantworten verändern den Wiederholungsplan nicht
+  const vorher = JSON.stringify(m.lernziele[sims[0].schritt.lernziel].karte);
+  assert.equal(JSON.stringify(zusatz.modell.lernziele[sims[0].schritt.lernziel].karte), vorher);
+});
