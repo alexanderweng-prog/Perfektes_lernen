@@ -1,0 +1,11 @@
+{
+  "name": "lern-motor",
+  "private": true,
+  "type": "module",
+  "description": "Fachunabhängiger Lern-Motor mit Wiederholungsblock",
+  "author": "Alexander Weng",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "import:naturalia": "node werkzeuge/naturalia-import.mjs ../Claude_test/fantasy-lernapp"
+  }
+}
