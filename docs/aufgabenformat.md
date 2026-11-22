@@ -55,3 +55,18 @@ Statt der Antwortfelder kann eine Aufgabe `erzeuge()` haben, das ein Objekt mit 
 1. Claude erzeugt einen Stapel im Format oben mit `pruefstatus: 'entwurf'`.
 2. Du prüfst fachlich und setzt `geprueft`.
 3. `npm test` muss grün sein (prüft Pflichtfelder, genau eine richtige MC-Option, Lückenzahl, erzeugende Aufgaben 20-mal).
+
+## Ergänzungen zu bestehenden Paketen
+
+Die Naturalia-Pakete werden aus Naturalia erzeugt und nicht von Hand geändert. Zusätzliche Inhalte stehen in `pakete/ergaenzungen/<paket>.js`:
+
+```js
+export default {
+  // Erklärung pro falscher Option: Vorlage → { Index der Option in Naturalia (0 = richtig): Text }
+  erklaerungen: { 's1-richtung': { 1: '…', 2: '…', 3: '…' } },
+  // Neue Varianten: wieVorlage bestimmt das Lernziel
+  aufgaben: [{ id: 's3-mensch-v2', wieVorlage: 's3-mensch', typ: 'zuordnen', schwierigkeit: 2, text: '…', paare: [[…]], erklaerung: '…' }]
+};
+```
+
+`pakete/ergaenze.js` fügt sie zur Laufzeit ein. Freigabe-IDs: `<paket>.<aufgabe>` und `<paket>.<vorlage>#erklaerungen`. Freigegeben wird im Dashboard; der Status liegt in der Tabelle `lernmotor.freigaben`. `node werkzeuge/inhaltsluecken.mjs <paket>` zeigt, wo noch Varianten oder Erklärungen fehlen.

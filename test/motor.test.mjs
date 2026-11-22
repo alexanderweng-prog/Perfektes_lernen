@@ -8,6 +8,7 @@ import { leeresModell, verbuche, status, istFaellig, passeNiveauAn, bewertungFue
 import { Sitzung, pauseNoetig, verzahne, zaehleFaellige } from '../motor/sitzung.js';
 import { aktualisiereSerie, leereSerie } from '../motor/belohnung.js';
 import { KATALOG } from '../pakete/katalog.js';
+import { ergaenze, ladeErgaenzung } from '../pakete/ergaenze.js';
 
 const TAG = 86400000;
 const t0 = new Date(2026, 10, 23, 8, 0); // Montag
@@ -215,4 +216,32 @@ test('Prüfstatus: nur geprüfte Aufgaben kommen in Umlauf', () => {
     assert.notEqual(a.schritt.lernziel, 'A1');
     if (a.schritt.phase === 'beispiel') s.weiter(); else s.antworte(richtigeNr(a.instanz));
   }
+});
+
+test('Ergänzungen: alle MC-Optionen erklärt, jedes Lernziel mit mind. 2 Varianten, Format gültig', async () => {
+  for (const k of KATALOG) {
+    const roh = (await import('../pakete/' + k.id + '.js')).default;
+    const p = ergaenze(roh, await ladeErgaenzung(k.id), { alleFreigeben: true });
+    assert.deepEqual(pruefePaket(p, { durchlaeufe: 15 }), [], k.id);
+    for (const a of p.aufgaben.filter(a => a.typ === 'mc')) {
+      const i = instanz(a);
+      assert.ok(i.optionen.filter(o => !o.richtig).every(o => o.erklaerung), `${a.id}: falsche Option ohne Erklärung`);
+    }
+    for (const l of p.lernziele) {
+      const gruppen = new Set(p.aufgaben.filter(a => a.lernziel === l.id).map(a => a.variantengruppe));
+      assert.ok(gruppen.size >= 2, `${l.id}: nur ${gruppen.size} Variantengruppe`);
+    }
+  }
+});
+
+test('Ergänzungen: ohne Freigabe Entwurf, nach Freigabe in Umlauf, zurückgezogen bleibt draussen', async () => {
+  const roh = (await import('../pakete/leistung.js')).default;
+  const erg = await ladeErgaenzung('leistung');
+  const ohne = ergaenze(roh, erg);
+  assert.ok(ohne.aufgaben.filter(a => a.pruefstatus === 'entwurf').length > 0);
+  assert.equal(instanz(ohne.aufgaben.find(a => a.id === 'leistung.s1-richtung')).optionen.find(o => !o.richtig).erklaerung, undefined);
+  const mit = ergaenze(roh, erg, { freigaben: { 'leistung.s3-mensch-v2': 'geprueft', 'leistung.s1-richtung#erklaerungen': 'geprueft', 'leistung.s3-mensch-v3': 'zurueckgezogen' } });
+  assert.equal(mit.aufgaben.find(a => a.id === 'leistung.s3-mensch-v2').pruefstatus, 'geprueft');
+  assert.equal(mit.aufgaben.find(a => a.id === 'leistung.s3-mensch-v3').pruefstatus, 'zurueckgezogen');
+  assert.ok(instanz(mit.aufgaben.find(a => a.id === 'leistung.s1-richtung')).optionen.filter(o => !o.richtig).every(o => o.erklaerung));
 });

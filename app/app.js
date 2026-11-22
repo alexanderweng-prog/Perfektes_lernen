@@ -1,14 +1,17 @@
 // Oberfläche für Schülerinnen und Schüler: Wiederholungsblock am Lektionsbeginn.
-// Version 1 ohne Backend: Lernstand und Antwortdaten bleiben im Browser (localStorage).
+// Mit Backend: Anmeldung mit Lerncode, Lernstand auf dem Server. Ohne Backend: Profile nur auf diesem Gerät.
 
 import {
-  EINSTELLUNGEN as E, Sitzung, leeresModell, status, zaehleFaellige, freigegebeneLernziele, istNeu,
-  aktualisiereSerie, leereSerie, zieheBonus, stufe, fortschrittStufe
+  EINSTELLUNGEN as E, Sitzung, status, zaehleFaellige, freigegebeneLernziele, istNeu,
+  aktualisiereSerie, zieheBonus, stufe, fortschrittStufe
 } from '../motor/index.js';
+import * as K from './konto.js';
+import { rpc, backendAktiv } from './backend.js';
+import { ergaenze, ladeErgaenzung } from '../pakete/ergaenze.js';
 import { KATALOG } from '../pakete/katalog.js';
 
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
-const MAX_PROTOKOLL = 3000;
+const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
 const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals, andere Variante' };
 const STATUS = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt' };
 
@@ -16,25 +19,33 @@ const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ---------- Speicher ---------- */
-const lies = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
-const schreib = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* privater Modus: nur im Speicher */ } };
-const PROFIL_KEY = 'lernmotor.profil.v1';
-const datenKey = id => 'lernmotor.v1.' + id;
+const PAKET_KEY = 'lernmotor.paket';
+let paket = null, daten = null, sitzung = null, ui = {}, wertung = null, syncFehler = null;
 
-let profil = lies(PROFIL_KEY) || { paket: 'leistung', xp: 0, serie: leereSerie(), bonus: [] };
-let paket = null, daten = null, sitzung = null, ui = {};
+function speichern() { K.speichereDaten(paket.id, daten); K.aktivitaet(); }
 
-function neueDaten(id) { return { modell: leeresModell(id), freigabe: [], sitzungen: [], protokoll: [] }; }
-function speichern() {
-  if (daten.protokoll.length > MAX_PROTOKOLL) daten.protokoll = daten.protokoll.slice(-MAX_PROTOKOLL);
-  schreib(datenKey(paket.id), daten); schreib(PROFIL_KEY, profil);
+async function sync() {
+  try { await K.synchronisiere(paket, daten); syncFehler = null; }
+  catch (e) { syncFehler = e.message; }
+}
+
+// Freigegebene Ergänzungen (von der Lehrperson im Dashboard geprüft). Offline: letzter bekannter Stand.
+const FREIGABEN_KEY = 'lernmotor.freigaben.v1';
+async function ladeFreigaben() {
+  let f = null;
+  try { f = JSON.parse(localStorage.getItem(FREIGABEN_KEY) || 'null'); } catch (e) { /* ohne Speicher */ }
+  if (backendAktiv()) {
+    try { f = await rpc('lm_freigaben'); localStorage.setItem(FREIGABEN_KEY, JSON.stringify(f)); } catch (e) { /* offline: Cache */ }
+  }
+  return f || {};
 }
 
 async function ladePaket(id) {
   const eintrag = PAKETE.find(p => p.id === id) || PAKETE[0];
-  paket = (await import('../pakete/' + eintrag.datei.replace('./', ''))).default;
-  daten = lies(datenKey(paket.id)) || neueDaten(paket.id);
-  profil.paket = paket.id;
+  const roh = (await import('../pakete/' + eintrag.datei.replace('./', ''))).default;
+  paket = ergaenze(roh, await ladeErgaenzung(roh.id), { freigaben: await ladeFreigaben() });
+  daten = K.ladeDaten(paket.id);
+  try { localStorage.setItem(PAKET_KEY, paket.id); } catch (e) { /* ohne Speicher */ }
   // Freigabe per Adresse, z. B. ?paket=leistung&freigabe=s1,s2 (Lehrperson gibt den Link weiter)
   const q = new URLSearchParams(location.search);
   if (q.get('freigabe')) daten.freigabe = q.get('freigabe').split(',').map(s => `${paket.id}.${s.trim()}`).filter(id => paket.kompetenzen.some(k => k.id === id));
@@ -42,15 +53,18 @@ async function ladePaket(id) {
 }
 
 /* ---------- Bausteine ---------- */
+const kontoChip = () => K.konto ? `<div style="display:flex;align-items:center;gap:8px"><span class="small" style="color:var(--header-muted)">${esc(K.konto.pseudonym)}</span><button class="btn sm" data-act="abmelden">${K.konto.modus === 'schule' ? 'Abmelden' : 'Wechseln'}</button></div>` : '';
 const kopf = (titel, lead, extra = '') => `<header class="top"><div class="toprow"><div class="logochip"><img src="logo.png" alt="Sekundarschule Halingen"></div>${extra}</div>
   <h1>${titel}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</header>`;
 const fuss = () => `<footer class="foot"><div class="logochip"><img src="logo.png" alt="Sekundarschule Halingen"></div>
   <p class="small">Lern-Motor · Autor: Alexander Weng · Sekundarschule Halingen</p>
-  <p class="small">Dein Lernstand wird nur auf diesem Gerät im Browser gespeichert.</p></footer>`;
+  <p class="small">${(K.konto ? K.konto.modus === 'schule' : K.backendAktiv())
+    ? 'Gespeichert wird nur dein Pseudonym, deine Klasse und deine Antworten, kein Name. Die Lehrperson sieht nur Klassensummen.'
+    : 'Dein Lernstand wird nur auf diesem Gerät im Browser gespeichert.'}</p></footer>`;
 
 function stufeHtml() {
-  return `<div class="row"><span class="small">Stufe ${stufe(profil.xp)} · ${profil.xp} XP</span><span class="small">Serie ${profil.serie.wert} ${profil.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span></div>
-    <div class="xpbar light"><div style="width:${Math.round(fortschrittStufe(profil.xp) * 100)}%"></div></div>`;
+  return `<div class="row"><span class="small">Stufe ${stufe(daten.xp)} · ${daten.xp} XP</span><span class="small">Serie ${daten.serie.wert} ${daten.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span></div>
+    <div class="xpbar light"><div style="width:${Math.round(fortschrittStufe(daten.xp) * 100)}%"></div></div>`;
 }
 
 /* ---------- Startseite ---------- */
@@ -62,7 +76,7 @@ function startHtml() {
   const zaehl = { neu: 0, wackelt: 0, sitzt: 0 };
   lz.forEach(l => zaehl[status(daten.modell, l.id, jetzt)]++);
   const block = faellig || neu
-    ? `<div class="kpis"><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div><div><b>${profil.serie.wert}</b><span class="small">Serie</span></div></div>
+    ? `<div class="kpis"><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div><div><b>${daten.serie.wert}</b><span class="small">Serie</span></div></div>
        <p style="margin:var(--space-3) 0">${faellig ? 'Zuerst kommen die fälligen Lernziele, danach höchstens ' + E.blockMaxNeueLernziele + ' neue.' : 'Heute ist nichts fällig. Du lernst ' + Math.min(neu, E.blockMaxNeueLernziele) + ' neue Lernziele kennen.'}</p>
        <button class="btn btn-primary block" data-act="block">Wiederholungsblock starten</button>
        <p class="small">Höchstens ${E.blockMaxAufgaben} Aufgaben oder ca. ${E.blockMaxMinuten} Minuten. Kürzer ist auch gut.</p>`
@@ -79,17 +93,22 @@ function startHtml() {
   }).join('');
   const optionen = PAKETE.filter(p => !p.versteckt || p.id === paket.id).map(p => `<option value="${p.id}" ${p.id === paket.id ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
   const freigabe = paket.kompetenzen.map(k => `<label><input type="checkbox" data-act="freigabe" value="${k.id}" ${!daten.freigabe.length || daten.freigabe.includes(k.id) ? 'checked' : ''}> ${esc(k.titel)}</label>`).join('');
-  const bonus = profil.bonus.length ? `<p class="small">Bonus-Trophäen: ${profil.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
-  return `${kopf('Wiederholungsblock', esc(paket.titel))}
+  const bonus = daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
+  const wertungHtml = wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
+      <p class="small">Gewertet wird, welcher Anteil der Klasse den Wiederholungsblock gemacht hat.</p>
+      <ol class="lzlist">${wertung.slice(0, 8).map(w => `<li${w.eigene ? ' style="font-weight:800"' : ''}><span>${esc(w.team)}${w.eigene ? ' (deine Klasse)' : ''}</span><span class="mono">${Math.round((w.anteil || 0) * 100)} %</span></li>`).join('')}</ol></section>` : '';
+  const syncHtml = syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)} Das wird nachgeholt.</div></div>` : '';
+  return `${kopf('Wiederholungsblock', esc(paket.titel), kontoChip())}
   <main class="wrap"><div class="stack-v">
-    <section class="card">${stufeHtml()}${block}</section>
+    ${syncHtml}<section class="card">${stufeHtml()}${block}</section>
+    ${wertungHtml}
     <section class="card"><div class="tag">Dein Lernstand</div>
       <div class="kpis" style="margin-top:var(--space-3)"><div><b>${zaehl.sitzt}</b><span class="small">sitzt</span></div><div><b>${zaehl.wackelt}</b><span class="small">wackelt</span></div><div><b>${zaehl.neu}</b><span class="small">neu</span></div></div>${bonus}</section>
     ${proKompetenz}
-    <details class="card einst"><summary><span>Einstellungen</span><span class="small">Thema, Freigabe</span></summary>
+    <details class="card einst"><summary><span>Einstellungen</span><span class="small">Thema, Freigabe, Daten</span></summary>
       <label>Thema <select data-act="paket">${optionen}</select></label>
       <p class="small" style="margin-top:var(--space-3)">Im Unterricht schon behandelt (nur diese Teile kommen dran):</p>${freigabe}
-      <div class="btnrow" style="margin-top:var(--space-3)">${ui.loeschen ? '<button class="btn sm" data-act="loeschenJa">Wirklich alles löschen</button><button class="btn sm" data-act="loeschenNein">Abbrechen</button>' : '<button class="btn sm" data-act="loeschen">Lernstand dieses Themas löschen</button>'}</div>
+      <div class="btnrow" style="margin-top:var(--space-3)">${ui.loeschen ? '<button class="btn sm" data-act="loeschenJa">Ja, alles löschen</button><button class="btn sm" data-act="loeschenNein">Abbrechen</button>' : '<button class="btn sm" data-act="loeschen">Meine Daten löschen</button>'}</div>
     </details>
     ${fuss()}
   </div></main>`;
@@ -181,14 +200,17 @@ function endeHtml() {
       ${stufeHtml()}</section>
     ${ui.bonus ? `<section class="card"><div class="bonus">${ui.bonus.icon}</div><p><b>Bonus-Trophäe: ${esc(ui.bonus.name)}</b></p><p class="small">Bonus-Trophäen kommen ab und zu, einfach so.</p></section>` : ''}
     <section class="card"><div class="tag">Fällig beim nächsten Mal</div><p>${zaehleFaellige(paket, daten.modell, { jetzt: new Date(+jetzt + 86400000), freigabe: daten.freigabe })} Lernziele bis morgen.</p></section>
-    ${neuUebrig ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt nur Neues. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock: Neues lernen</button></section>` : ''}
-    <button class="btn btn-primary block" data-act="start">Zur Übersicht</button>
+    ${neuUebrig && !ui.speichert ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt nur Neues. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock: Neues lernen</button></section>` : ''}
+    ${ui.speichert ? '<p class="small">Wird gespeichert …</p>' : syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)}</div></div>` : K.konto.modus === 'schule' ? '<p class="small">Gespeichert.</p>' : ''}
+    ${K.konto.geteilt
+      ? `<button class="btn btn-primary block" data-act="abmelden" ${ui.speichert ? 'disabled' : ''}>Fertig und abmelden</button><p class="small">Gemeinsames Gerät: Melde dich ab, damit das nächste Kind mit seinem eigenen Lernstand übt.</p><button class="btn block" data-act="start">Zur Übersicht</button>`
+      : '<button class="btn btn-primary block" data-act="start">Zur Übersicht</button>'}
     ${fuss()}
   </div></main>`;
 }
 
 function render() {
-  $app.innerHTML = ui.seite === 'runde' ? rundeHtml() : ui.seite === 'ende' ? endeHtml() : startHtml();
+  $app.innerHTML = !K.konto ? anmeldeHtml() : ui.seite === 'runde' ? rundeHtml() : ui.seite === 'ende' ? endeHtml() : startHtml();
   const f = document.getElementById('ein') || document.querySelector('[data-luecke]');
   if (f && !f.disabled) f.focus({ preventScroll: true });
   const w = document.getElementById('weiterBtn');
@@ -233,25 +255,28 @@ function werte() {
   if (!r.gueltig) { ui.warnung = r.hinweis || 'Bitte gib eine Antwort ein.'; ui.frageSicherheit = false; ui.sicherheit = null; return render(); }
   ui.ergebnis = r; ui.frageSicherheit = false; ui.warnung = null;
   daten.modell = sitzung.modell;
-  daten.protokoll.push(sitzung.protokoll[sitzung.protokoll.length - 1]);
-  profil.xp += r.xp;
+  daten.ausstehend.antworten.push(sitzung.protokoll[sitzung.protokoll.length - 1]);
+  daten.xp += r.xp;
   ui.pauseFolgt = r.pauseHinweis;
   speichern();
+  if (daten.ausstehend.antworten.length >= SYNC_ALLE) sync();
   render();
 }
 
-function beende() {
+async function beende() {
   const z = sitzung.abschliessen();
-  profil.xp += z.blockXp;
-  if (z.abrufe) profil.serie = aktualisiereSerie(profil.serie, new Date());
+  daten.xp += z.blockXp;
+  if (z.abrufe) daten.serie = aktualisiereSerie(daten.serie, new Date());
   const bonus = zieheBonus(z);
-  if (bonus) profil.bonus = [...profil.bonus, { ...bonus, am: z.ende }].slice(-30);
+  if (bonus) daten.bonus = [...daten.bonus, { ...bonus, am: z.ende }].slice(-30);
   daten.modell = sitzung.modell;
   daten.sitzungen = [...daten.sitzungen, z].slice(-200);
+  daten.ausstehend.sitzungen.push(z);
   speichern();
-  ui = { seite: 'ende', zusammenfassung: z, bonus };
+  ui = { seite: 'ende', zusammenfassung: z, bonus, speichert: K.konto.modus === 'schule' };
   sitzung = null;
   render(); scrollTo(0, 0);
+  if (K.konto.modus === 'schule') { await sync(); ui.speichert = false; render(); }
 }
 
 $app.addEventListener('click', e => {
@@ -260,7 +285,17 @@ $app.addEventListener('click', e => {
   const act = b.dataset.act;
   if (act === 'block') starteSitzung('block');
   else if (act === 'zusatz') starteSitzung('zusatz');
-  else if (act === 'start') { ui = {}; render(); }
+  else if (act === 'start') { ui = {}; render(); ladeWertung(); }
+  else if (act === 'abmelden') abmelden(false);
+  else if (act === 'abmeldenTrotzdem') abmelden(true);
+  else if (act === 'anmelden') anmeldenKlick();
+  else if (act === 'registrieren') registrierenKlick();
+  else if (act === 'codeNotiert') anmeldenMitCode(ui.neu.lerncode, true);
+  else if (act === 'zeigeNeu') { ui = { seite: 'login', neuForm: true }; render(); }
+  else if (act === 'zeigeLogin') { ui = { seite: 'login' }; render(); }
+  else if (act === 'lokal') { ui = { seite: 'login', lokal: true }; render(); }
+  else if (act === 'profil') { K.lokalWaehlen(K.lokaleProfile().find(p => p.id === b.dataset.id)); oeffne(); }
+  else if (act === 'profilNeu') { const n = document.getElementById('pname').value; if (n.trim()) { K.lokalWaehlen(K.lokalesProfilNeu(n)); oeffne(); } }
   else if (act === 'mc') { ui.auswahl = +b.dataset.nr; antwortFest(+b.dataset.nr); }
   else if (act === 'pruefen') { ui.eingabe = sammleEingabe(); antwortFest(ui.eingabe); }
   else if (act === 'muster') { ui.eingabe = sammleEingabe(); ui.musterGezeigt = true; render(); }
@@ -280,7 +315,7 @@ $app.addEventListener('click', e => {
   else if (act === 'ende') beende();
   else if (act === 'loeschen') { ui.loeschen = true; render(); }
   else if (act === 'loeschenNein') { ui.loeschen = false; render(); }
-  else if (act === 'loeschenJa') { daten = neueDaten(paket.id); ui = {}; speichern(); render(); }
+  else if (act === 'loeschenJa') loeschen();
 });
 $app.addEventListener('change', async e => {
   const t = e.target;
@@ -293,6 +328,7 @@ $app.addEventListener('change', async e => {
 });
 $app.addEventListener('submit', e => {
   e.preventDefault();
+  if (!K.konto) { if (e.target.dataset.form === 'neu') registrierenKlick(); else if (e.target.dataset.form === 'profil') document.querySelector('[data-act="profilNeu"]').click(); else anmeldenKlick(); return; }
   if (ui.ergebnis || ui.frageSicherheit) return;
   ui.eingabe = sammleEingabe(); antwortFest(ui.eingabe);
 });
@@ -300,9 +336,109 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && ui.seite === 'runde' && ui.ergebnis && document.activeElement?.id !== 'weiterBtn') { e.preventDefault(); document.getElementById('weiterBtn')?.click(); }
 });
 
-(async () => {
+async function oeffne() {
   const q = new URLSearchParams(location.search);
-  try { await ladePaket(q.get('paket') || profil.paket); }
+  let wunsch = q.get('paket');
+  if (!wunsch) { try { wunsch = localStorage.getItem(PAKET_KEY); } catch (e) { /* ohne Speicher */ } }
+  try { await ladePaket(wunsch || 'leistung'); }
   catch (err) { $app.innerHTML = `<main class="wrap"><p>Das Thema konnte nicht geladen werden: ${esc(err.message)}</p></main>`; return; }
-  render();
+  ui = {}; render();
+  if (K.konto && K.konto.modus === 'schule' && (daten.ausstehend.antworten.length || daten.ausstehend.sitzungen.length)) { await sync(); render(); }
+  ladeWertung();
+}
+
+async function ladeWertung() {
+  try { wertung = await K.klassenwertung(); } catch (e) { wertung = null; }
+  if (K.konto && !ui.seite) render();
+}
+
+/* ---------- Anmelden ---------- */
+function anmeldeHtml() {
+  const fehler = ui.fehler ? `<div class="fb bad"><div class="fbb">${esc(ui.fehler)}</div></div>` : '';
+  const geteilt = `<label class="einst" style="display:flex;gap:8px;align-items:center;margin:var(--space-3) 0"><input type="checkbox" id="geteilt" ${ui.geteilt === false ? '' : 'checked'}> Gemeinsames Gerät (z. B. Schul-iPad): nach dem Üben abmelden</label>`;
+  let inhalt;
+  if (ui.neu) {
+    inhalt = `<section class="card"><div class="tag">Dein Lerncode</div>
+      <p class="bignum mono" style="font-size:var(--text-xl);word-break:break-word">${esc(ui.neu.lerncode)}</p>
+      <p><b>Schreib diesen Code jetzt in dein Heft.</b> Mit ihm kommst du auf jedem Gerät an deinen Lernstand. Ohne Code geht das nicht, auch die Lehrperson kann ihn nicht nachschauen.</p>
+      <p class="small">Dein Name in der App: <b>${esc(ui.neu.pseudonym)}</b> · Klasse: ${esc(ui.neu.team)}</p>
+      <button class="btn btn-primary block" data-act="codeNotiert">Ich habe ihn aufgeschrieben</button></section>`;
+  } else if (ui.lokal || !K.backendAktiv()) {
+    const profile = K.lokaleProfile();
+    inhalt = `<section class="card"><div class="tag">Wer übt?</div>
+      ${profile.length ? `<div class="opts" style="margin-top:var(--space-3)">${profile.map(p => `<button class="opt" data-act="profil" data-id="${p.id}"><span>${esc(p.pseudonym)}</span></button>`).join('')}</div>` : ''}
+      <form data-form="profil" class="ansrow" style="margin-top:var(--space-4)"><input id="pname" class="txtin" maxlength="30" placeholder="Spitzname (kein echter Name)" aria-label="Spitzname"><button type="button" class="btn" data-act="profilNeu">Neu</button></form>
+      <p class="small">Ohne Konto bleibt der Lernstand nur auf diesem Gerät und zählt nicht für die Klasse.</p>
+      ${K.backendAktiv() ? '<button class="btn sm" data-act="zeigeLogin">Zurück zur Anmeldung</button>' : ''}</section>`;
+  } else if (ui.neuForm) {
+    inhalt = `<section class="card"><div class="tag">Neu hier</div>
+      <form data-form="neu"><p>Gib den Klassencode ein, den deine Lehrperson an die Tafel schreibt.</p>
+      <input id="kcode" class="numin" style="width:100%;text-transform:uppercase" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="z. B. K7QM2" aria-label="Klassencode">
+      <button class="btn btn-primary block" style="margin-top:var(--space-3)" data-act="registrieren" type="button" ${ui.laedt ? 'disabled' : ''}>Lerncode erhalten</button></form>
+      ${fehler}<button class="btn sm" style="margin-top:var(--space-3)" data-act="zeigeLogin">Ich habe schon einen Lerncode</button></section>`;
+  } else {
+    inhalt = `<section class="card"><div class="tag">Anmelden</div>
+      <form data-form="login"><p>Gib deinen Lerncode ein, z. B. <span class="mono">tiger-mond-segel-4821</span>.</p>
+      <input id="lcode" class="numin" style="width:100%;font-size:var(--text-md)" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Lerncode">
+      ${geteilt}
+      <button class="btn btn-primary block" data-act="anmelden" type="button" ${ui.laedt ? 'disabled' : ''}>Anmelden</button></form>
+      ${fehler}
+      <div class="btnrow" style="margin-top:var(--space-3)"><button class="btn sm" data-act="zeigeNeu">Neu hier: Klassencode eingeben</button><button class="btn sm" data-act="lokal">Ohne Konto üben</button></div></section>`;
+  }
+  return `${kopf('Wiederholungsblock', 'Kurz üben, damit es sitzt.')}<main class="wrap"><div class="stack-v">${inhalt}${fuss()}</div></main>`;
+}
+
+async function anmeldenMitCode(code, geteilt) {
+  ui.laedt = true; ui.fehler = null; render();
+  try { await K.anmelden(code, geteilt); await oeffne(); }
+  catch (e) { ui.laedt = false; ui.fehler = e.message; ui.neu = null; render(); }
+}
+function anmeldenKlick() {
+  const code = (document.getElementById('lcode') || {}).value || '';
+  const geteilt = (document.getElementById('geteilt') || {}).checked;
+  if (!code.trim()) { ui.fehler = 'Gib deinen Lerncode ein.'; return render(); }
+  anmeldenMitCode(code, geteilt);
+}
+async function registrierenKlick() {
+  const kc = ((document.getElementById('kcode') || {}).value || '').trim();
+  if (!kc) { ui.fehler = 'Gib den Klassencode ein.'; return render(); }
+  ui.laedt = true; ui.fehler = null; render();
+  try { ui.neu = await K.registrieren(kc); ui.laedt = false; render(); }
+  catch (e) { ui.laedt = false; ui.fehler = e.message; render(); }
+}
+
+async function abmelden(trotzdem) {
+  if (K.konto.modus === 'schule' && !trotzdem) {
+    await sync();
+    if (syncFehler) {
+      ui = { seite: ui.seite }; render();
+      $app.querySelector('main .stack-v').insertAdjacentHTML('afterbegin', `<div class="fb warn"><div class="fbb">Deine letzten Antworten sind noch nicht auf dem Server (${esc(syncFehler)}). Wenn du dich jetzt abmeldest, gehen sie verloren.</div><div class="btnrow" style="margin-top:8px"><button class="btn sm" data-act="abmeldenTrotzdem">Trotzdem abmelden</button><button class="btn sm" data-act="start">Abbrechen</button></div></div>`);
+      return;
+    }
+  }
+  await K.abmelden({ trotzdem: true });
+  paket = null; daten = null; wertung = null; syncFehler = null;
+  ui = { seite: 'login' }; render(); scrollTo(0, 0);
+}
+
+async function loeschen() {
+  try { await K.meineDatenLoeschen(); }
+  catch (e) { ui.loeschen = false; syncFehler = e.message; return render(); }
+  paket = null; daten = null; wertung = null;
+  ui = { seite: 'login' }; render();
+}
+
+// Gemeinsame Geräte: nach Inaktivität abmelden (auch wenn der Tab offen bleibt)
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && K.konto && K.konto.geteilt) {
+    const vorher = K.konto;
+    await K.pruefeAblauf();
+    if (!K.konto && vorher) { paket = null; daten = null; ui = { seite: 'login' }; render(); }
+  }
+});
+
+(async () => {
+  await K.pruefeAblauf();
+  if (!K.konto) { ui = { seite: 'login' }; render(); return; }
+  await oeffne();
 })();

@@ -12,8 +12,10 @@ Autor: Alexander Weng · Sekundarschule Halingen
 | `motor/` | Lern-Motor ohne Fach- und Oberflächencode: Schülermodell (FSRS), Sitzungsplaner, Bewertung, Belohnungen. Alle Stellschrauben in `motor/einstellungen.js`. |
 | `vendor/ts-fsrs/` | FSRS-Bibliothek ts-fsrs 5.4.2 (MIT), unverändert |
 | `pakete/` | Inhaltspakete. Die NuT-Pakete werden aus Naturalia erzeugt (`werkzeuge/naturalia-import.mjs`). |
-| `app/` | Schüler-Oberfläche: Wiederholungsblock, Lernstand lokal im Browser |
-| `docs/` | Bestandsaufnahme, Aufgabenformat |
+| `app/` | Schüler-App (`index.html`) und Lehrer-Dashboard (`lehrer.html`) |
+| `backend/` | Datenbank: Schema, Funktionen, Freigaben (Supabase) |
+| `pakete/ergaenzungen/` | Von Claude erstellte Erklärungen zu falschen Antworten und neue Aufgabenvarianten (Entwurf bis zur Freigabe) |
+| `docs/` | Bestandsaufnahme, Aufgabenformat, Backend und Datenschutz |
 | `test/` | Tests (`npm test`, nur Node, keine Abhängigkeiten) |
 
 ## Starten
@@ -43,12 +45,18 @@ npm test
 - **Sicherheitsabfrage:** bei ca. 30 % der Abrufe nach der Antwort und vor dem Feedback («sicher / unsicher / geraten»). Richtig, aber unsicher zählt für FSRS als «schwer». Falsch und sicher wird als Fehlvorstellung protokolliert.
 - **Pausenhinweis:** Fehlerquote der letzten 5 Aufgaben ≥ 60 % und mindestens 30 Prozentpunkte über dem bisherigen Schnitt der Sitzung (frühestens nach 8 Aufgaben). Das Kind entscheidet. Danach zählen Fehler nur noch als «schwer».
 - **Belohnung:** XP nur für richtige Abrufe und abgeschlossene Blöcke, Bonus-Trophäe zufällig nach ca. jeder vierten Sitzung, Serie mit einem freien Schultag pro Woche, Wochenende zählt nicht, Unterbruch halbiert statt nullt.
-- **Antwortdaten** (Aufgabe, Lernziel, richtig, gewählte Option, Sicherheit, Zeit, nach Pause ja/nein) werden lokal gesammelt (`protokoll`), damit sie später ans Backend gehen können.
+- **Antwortdaten** (Aufgabe, Lernziel, richtig, gewählte Option, Sicherheit, Zeit, nach Pause ja/nein) gehen mit dem Lerncode ans Backend; ohne Konto bleiben sie auf dem Gerät.
 
 Alle Zahlen sind Annahmen und im Pilot anzupassen.
 
-## Noch nicht umgesetzt (bewusst)
+## Ergänzte Inhalte
 
-- Backend, Pseudonym-Login, Lehrer-Dashboard (Schritte 5 und 6): erst nach Zustimmung der Schule.
-- Klassenduell und Klassen-Leaderboard: brauchen das Backend.
+- 660 Erklärungen zu falschen Antwortoptionen (alle 220 Multiple-Choice-Aufgaben aus Naturalia).
+- 138 neue Aufgabenvarianten, sodass jedes der 201 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
+- Alles ist Entwurf, bis eine Lehrperson es im Dashboard unter «Neue Inhalte prüfen» freigibt.
+
+## Noch offen
+
 - Simulationen als Aufgabentyp.
+- Pilot mit einer Klasse (4–6 Wochen), danach Parameter in `motor/einstellungen.js` anpassen.
+- Kanti-Trainer und Mathe als Pakete.

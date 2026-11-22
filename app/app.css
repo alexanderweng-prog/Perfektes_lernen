@@ -37,3 +37,5 @@ textarea.txtin { min-height: 120px; }
 .einst select { min-height: 44px; font: inherit; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 var(--space-2); max-width: 100%; }
 .fbb img, .lbody img { max-width: 100%; height: auto; }
 @media (max-width: 420px) { .zrow { grid-template-columns: 1fr; } }
+label.einst, .einst label { flex-wrap: wrap; }
+label.einst select, .einst select { flex: 1 1 12rem; min-width: 0; width: 100%; max-width: 100%; font: inherit; min-height: 44px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
