@@ -12,7 +12,7 @@ export const KATALOG = [
     "titel": "Den Körper analysieren",
     "kapitel": "NaTech 7, Kapitel 2",
     "datei": "./nt7-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt7-3",
@@ -40,7 +40,7 @@ export const KATALOG = [
     "titel": "Arbeiten im Labor",
     "kapitel": "NaTech 7, Kapitel 6",
     "datei": "./nt7-6.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt7-7",
@@ -61,14 +61,14 @@ export const KATALOG = [
     "titel": "Gewässer-Ökosysteme erforschen",
     "kapitel": "NaTech 8, Kapitel 2",
     "datei": "./nt8-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-3",
     "titel": "Funktionen des Körpers analysieren",
     "kapitel": "NaTech 8, Kapitel 3",
     "datei": "./nt8-3.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-4",
