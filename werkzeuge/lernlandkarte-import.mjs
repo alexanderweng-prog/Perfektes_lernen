@@ -3,9 +3,10 @@
 // Aufruf: node werkzeuge/lernlandkarte-import.mjs <Pfad zu nut-lernlandkarte>
 // Übernommen wird der Skriptteil von «Hilfsfunktionen» bis vor «Speicher»: Hilfsfunktionen, Stationen, Lernkarten,
 // Thema, Simulationen und deren Hilfsfunktionen. Alles danach (Spielstand, Darstellung, Klassenwertung) braucht der Lern-Motor nicht.
+// Sprechtexte (MP3) aus audio/<id>/ kopiert man nach audio/<id>/ im Lern-Motor (siehe README).
 // Die erzeugten Dateien nicht von Hand ändern, sondern das Kapitel in der Lernlandkarte ändern und neu importieren.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KAPITEL, katalogDatei } from './kapitel.mjs';
@@ -25,7 +26,7 @@ for (const [id, titel, kapitel, quelle, datei] of KAPITEL.filter(k => k[3] === '
 import { ausNaturalia } from './naturalia-adapter.js';
 
 ${code}
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, titel, kapitel })});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, titel, kapitel, audio: existsSync(join(QUELLE, 'audio', id)) ? id : null })});
 `);
   console.log('geschrieben: pakete/' + id + '.js');
 }

@@ -551,4 +551,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-1","titel":"Optische Phänomene erkunden","kapitel":"NaTech 9, Kapitel 1"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-1","titel":"Optische Phänomene erkunden","kapitel":"NaTech 9, Kapitel 1","audio":"nt9-1"});

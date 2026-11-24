@@ -9,6 +9,7 @@ import * as K from './konto.js';
 import { rpc, backendAktiv } from './backend.js';
 import { ergaenze, ladeErgaenzung } from '../pakete/ergaenze.js';
 import { KATALOG } from '../pakete/katalog.js';
+import { lies, stoppeVorlesen, vorlesenLaeuft, vorlesenMoeglich } from './vorlesen.js';
 
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
 const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
@@ -153,13 +154,35 @@ function simHtml(lz, id) {
   return `<div class="simbox"><div class="tag">Simulation: ${esc(s.titel)}</div>${s.html ? `<div class="lbody">${s.html}</div>` : ''}${knoepfe}<div class="simhost" data-sim="${s.id}"></div></div>`;
 }
 
+// Vorlesen: Lernkarten mit Aufnahme (MP3), sonst und für Aufgaben die Browser-Stimme
+const vorleseKnopf = () => vorlesenMoeglich() ? `<button class="btn sm" data-act="vorlesen" aria-label="Vorlesen">${vorlesenLaeuft() ? 'Stopp' : 'Vorlesen'}</button>` : '';
+const workedText = b => b ? [b.given, ...b.steps.map(s => s[0] + ': ' + s[1])].join('. ') : '';
+const karteTeil = k => k ? { audio: k.audio || null, text: k.sprechtext || [k.titel, k.html, workedText(k.beispiel)].filter(Boolean).join('. ') } : null;
+function vorleseTeile() {
+  const a = sitzung && sitzung.aktuell;
+  if (!a) return [];
+  const i = a.instanz;
+  if (a.schritt.phase === 'beispiel') {
+    const loes = i.typ === 'mc' ? 'Richtig ist: ' + i.optionen.find(o => o.richtig).text : '';
+    return [karteTeil(a.lernziel.lernkarte), ...(a.lernziel.zusatzkarten || []).map(karteTeil),
+      { text: ['Vorgerechnet: ' + i.text, loes, i.erklaerung].filter(Boolean).join('. ') }];
+  }
+  if (ui.ergebnis) {
+    const e = ui.ergebnis;
+    return [{ text: (e.richtig ? 'Richtig. ' : (e.punkte > 0 ? 'Teilweise richtig. ' : 'Nicht ganz. ') + 'Richtig wäre: ' + e.loesung + '. ') + (e.erklaerung || '') }];
+  }
+  const opts = i.typ === 'mc' ? i.optionen.map((o, k) => 'Antwort ' + 'ABCDEF'[k] + ': ' + o.text).join('. ') : '';
+  const hinweis = { luecke: 'Fülle die Lücken aus.', zuordnen: 'Ordne richtig zu.', reihenfolge: 'Bringe in die richtige Reihenfolge.', zahl: 'Gib die Zahl ein.' }[i.typ] || '';
+  return [{ text: [String(i.text).replace(/___/g, ' Lücke '), opts, hinweis].filter(Boolean).join('. ') }];
+}
+
 function beispielHtml(a) {
   const k = a.lernziel.lernkarte, i = a.instanz;
   const workedHtml = b => b ? `<div class="worked"><div class="wgiven">${b.given}</div><ol class="wsteps">${b.steps.map(s => `<li><div><b>${s[0]}</b><br>${s[1]}</div></li>`).join('')}</ol></div>` : '';
   const worked = workedHtml(k && k.beispiel);
   const zusatz = (a.lernziel.zusatzkarten || []).map(z => `<div class="zusatzkarte"><p><b>${esc(z.titel)}</b></p>${z.html ? `<div class="lbody">${z.html}</div>` : ''}${workedHtml(z.beispiel)}</div>`).join('');
   const loes = i.typ === 'mc' ? `<p><b>Richtig:</b> ${i.optionen.find(o => o.richtig).text}</p>` : i.typ === 'zahl' ? '' : `<p><b>Lösung:</b> ${esc(i.musterantwort || '')}</p>`;
-  return `<div class="tag">Neu: ${esc(a.lernziel.titel)}</div>
+  return `<div class="row" style="margin:0 0 var(--space-2)"><div class="tag">Neu: ${esc(a.lernziel.titel)}</div>${vorleseKnopf()}</div>
     ${k && k.html ? `<div class="lbody">${k.html}</div>` : ''}${worked}${zusatz}
     <div class="worked"><div class="wgiven"><b>Vorgerechnet:</b> ${i.text}</div>${loes}<div class="lbody">${i.erklaerung || ''}</div></div>
     ${simHtml(a.lernziel, ui.simWahl)}
@@ -194,7 +217,7 @@ function rundeHtml() {
         <div class="fbb">${ui.ergebnis.richtig ? '' : `Richtig wäre: <b>${ui.ergebnis.loesung}</b><br>`}${ui.ergebnis.erklaerung || ''}${!ui.ergebnis.richtig ? '<br><br>Dieses Lernziel kommt bald nochmals, in anderer Form.' : ''}</div></div>
         <button class="btn btn-primary block" data-act="weiter" id="weiterBtn">Weiter</button>` : '';
     const simZuerst = a.aufgabe.simulation ? simHtml({ simulationen: (a.lernziel.simulationen || []).filter(x => x.id === a.aufgabe.simulation) }) : '';
-    inhalt = `<section class="card"><p class="small">${esc(a.lernziel.titel)}</p>${simZuerst}<div class="q">${a.instanz.text}</div>
+    inhalt = `<section class="card"><div class="row" style="margin:0 0 var(--space-2)"><p class="small" style="margin:0">${esc(a.lernziel.titel)}</p>${vorleseKnopf()}</div>${simZuerst}<div class="q">${a.instanz.text}</div>
       ${a.zeigeHilfe ? hilfeHtml(a) : ''}${eingabeHtml(a, fertig || ui.frageSicherheit)}${sicherheit}${fb}${erg}</section>`;
   }
   return `${kopf(sitzung.art === 'block' ? 'Wiederholungsblock' : 'Zusatzblock', '', `<button class="btn sm" data-act="ende">Beenden</button>`)}
@@ -309,6 +332,12 @@ $app.addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
   const act = b.dataset.act;
+  if (act === 'vorlesen') {
+    if (vorlesenLaeuft()) stoppeVorlesen();
+    else lies(vorleseTeile(), { beiAenderung: an => document.querySelectorAll('[data-act="vorlesen"]').forEach(x => { x.textContent = an ? 'Stopp' : 'Vorlesen'; }) });
+    return;
+  }
+  stoppeVorlesen();
   if (act === 'block') starteSitzung('block');
   else if (act === 'zusatz') starteSitzung('zusatz');
   else if (act === 'start') { ui = {}; render(); ladeWertung(); }
@@ -354,6 +383,7 @@ $app.addEventListener('change', async e => {
   }
 });
 $app.addEventListener('submit', e => {
+  stoppeVorlesen();
   e.preventDefault();
   if (!K.konto) { if (e.target.dataset.form === 'neu') registrierenKlick(); else if (e.target.dataset.form === 'profil') document.querySelector('[data-act="profilNeu"]').click(); else anmeldenKlick(); return; }
   if (ui.ergebnis || ui.frageSicherheit) return;

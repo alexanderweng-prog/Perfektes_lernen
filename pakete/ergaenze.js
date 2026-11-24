@@ -55,6 +55,7 @@ export async function ladeErgaenzung(paketId) {
   let erg = null, sim = [], kt = {};
   if (eintrag.ergaenzung) try { erg = (await import(`./ergaenzungen/${paketId}.js`)).default; } catch (e) { /* keine Ergänzung */ }
   try { sim = (await import('./ergaenzungen/simulationen.js')).default[paketId] || []; } catch (e) { /* keine Simulationsfragen */ }
+  try { sim = sim.concat((await import('./ergaenzungen/simulationen-lernlandkarte.js')).default[paketId] || []); } catch (e) { /* keine */ }
   try { kt = (await import('./ergaenzungen/kurztests.js')).default[paketId] || {}; } catch (e) { /* keine Erklärungen zu «Kurz testen» */ }
   if (!erg && !sim.length && !Object.keys(kt).length) return null;
   return { erklaerungen: { ...((erg && erg.erklaerungen) || {}), ...kt }, aufgaben: [...((erg && erg.aufgaben) || []), ...sim] };

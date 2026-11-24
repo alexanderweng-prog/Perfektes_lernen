@@ -503,4 +503,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-7","titel":"Land-Ökosysteme erforschen","kapitel":"NaTech 9, Kapitel 7"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-7","titel":"Land-Ökosysteme erforschen","kapitel":"NaTech 9, Kapitel 7","audio":"nt9-7"});
