@@ -12,7 +12,7 @@ export const KATALOG = [
     "titel": "Den Körper analysieren",
     "kapitel": "NaTech 7, Kapitel 2",
     "datei": "./nt7-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt7-3",
@@ -40,7 +40,7 @@ export const KATALOG = [
     "titel": "Arbeiten im Labor",
     "kapitel": "NaTech 7, Kapitel 6",
     "datei": "./nt7-6.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt7-7",
@@ -61,21 +61,21 @@ export const KATALOG = [
     "titel": "Gewässer-Ökosysteme erforschen",
     "kapitel": "NaTech 8, Kapitel 2",
     "datei": "./nt8-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-3",
     "titel": "Funktionen des Körpers analysieren",
     "kapitel": "NaTech 8, Kapitel 3",
     "datei": "./nt8-3.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-4",
     "titel": "Chemische Reaktionen erforschen",
     "kapitel": "NaTech 8, Kapitel 4",
     "datei": "./nt8-4.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-5",
@@ -89,56 +89,56 @@ export const KATALOG = [
     "titel": "Optische Phänomene erkunden",
     "kapitel": "NaTech 9, Kapitel 1",
     "datei": "./nt9-1.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-2",
     "titel": "Atommodelle nutzen",
     "kapitel": "NaTech 9, Kapitel 2",
     "datei": "./nt9-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-3",
     "titel": "Elektronische Schaltungen untersuchen",
     "kapitel": "NaTech 9, Kapitel 3",
     "datei": "./nt9-3.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-4",
     "titel": "Energie und Leistung erfassen",
     "kapitel": "NaTech 9, Kapitel 4",
     "datei": "./nt9-4.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-5",
     "titel": "Genetik und Gentechnik verstehen",
     "kapitel": "NaTech 9, Kapitel 5",
     "datei": "./nt9-5.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-6",
     "titel": "Evolution nachvollziehen",
     "kapitel": "NaTech 9, Kapitel 6",
     "datei": "./nt9-6.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-7",
     "titel": "Land-Ökosysteme erforschen",
     "kapitel": "NaTech 9, Kapitel 7",
     "datei": "./nt9-7.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-8",
     "titel": "Stoffkreisläufe erkunden",
     "kapitel": "NaTech 9, Kapitel 8",
     "datei": "./nt9-8.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "leistung",

@@ -219,11 +219,11 @@ test('Prüfstatus: nur geprüfte Aufgaben kommen in Umlauf', () => {
   }
 });
 
-// Kapitel aus der Lernlandkarte haben noch keine Ergänzungen (siehe README, «Noch offen»); für sie gilt nur die Formatprüfung oben.
+// Alle Kapitel haben Ergänzungen. Ein neu importiertes Kapitel ohne Ergänzung lässt diesen Test scheitern, bis sie geschrieben ist.
 const MIT_ERGAENZUNG = KATALOG.filter(k => existsSync(new URL(`../pakete/ergaenzungen/${k.id}.js`, import.meta.url)));
 
 test('Ergänzungen: alle MC-Optionen erklärt, jedes Lernziel mit mind. 2 Varianten, Format gültig', async () => {
-  assert.ok(MIT_ERGAENZUNG.length >= 9);
+  assert.equal(MIT_ERGAENZUNG.length, KATALOG.length, 'Kapitel ohne Ergänzung: ' + KATALOG.filter(k => !MIT_ERGAENZUNG.includes(k)).map(k => k.id).join(', '));
   for (const k of MIT_ERGAENZUNG) {
     const roh = (await import('../pakete/' + k.id + '.js')).default;
     const p = ergaenze(roh, await ladeErgaenzung(k.id), { alleFreigeben: true });

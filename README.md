@@ -61,11 +61,11 @@ Alle Zahlen sind Annahmen und im Pilot anzupassen.
 - Lernkarten ohne eigene Aufgaben (Sicherheit, weitere Beispiele) erscheinen im Schritt «Beispiel» beim nächstliegenden Lernziel.
 - Nicht übernommen: die Selbsteinschätzung der Lernlandkarte zu den Lehrplan-21-Kompetenzen, Spielmodi (Challenge, Sanduhr), Vorlesen.
 
-## Ergänzte Inhalte (die 9 Naturalia-Kapitel)
+## Ergänzte Inhalte
 
-- 660 Erklärungen zu falschen Antwortoptionen (alle 220 Multiple-Choice-Aufgaben aus Naturalia) und 162 zu den 54 «Kurz testen»-Fragen.
-- 138 neue Aufgabenvarianten, sodass jedes der 201 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
-- 56 Fragen zu den Naturalia-Simulationen («Simulation mit Frage», nur im freiwilligen Zusatzblock).
+- Erklärungen zu jeder falschen Antwortoption aller Multiple-Choice-Aufgaben: 822 in den 9 Naturalia-Kapiteln, 1443 in den 13 Kapiteln aus der Lernlandkarte.
+- 251 neue Aufgabenvarianten (138 + 113), sodass jedes der 515 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
+- 56 Fragen zu den Naturalia-Simulationen («Simulation mit Frage», nur im freiwilligen Zusatzblock). Die 89 Simulationen der Lernlandkarte haben noch keine Fragen; sie erscheinen im Schritt «Beispiel».
 - Alles ist Entwurf, bis eine Lehrperson es im Dashboard unter «Neue Inhalte prüfen» freigibt.
 
 ## Simulationen
@@ -74,6 +74,6 @@ Die 56 Simulationen aus Naturalia werden mit importiert und je einem Lernziel zu
 
 ## Noch offen
 
-- Ergänzungen für die 13 Kapitel aus der Lernlandkarte: rund 1440 Erklärungen zu falschen Antworten (481 Multiple-Choice-Aufgaben), Varianten für 113 Lernziele mit nur einer Aufgabe, Fragen zu 89 Simulationen. Bis dahin zeigen diese Kapitel bei falschen Antworten nur die allgemeine Erklärung, und ein falsch gelöstes Lernziel kommt teils in derselben Form nochmals.
+- Fragen zu den 89 Simulationen aus der Lernlandkarte (Zusatzblock).
 - Pilot mit einer Klasse (4–6 Wochen), danach Parameter in `motor/einstellungen.js` anpassen.
 - Kanti-Trainer und Mathe als Pakete.
