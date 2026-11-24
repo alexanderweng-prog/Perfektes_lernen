@@ -103,14 +103,14 @@ export const KATALOG = [
     "titel": "Elektronische Schaltungen untersuchen",
     "kapitel": "NaTech 9, Kapitel 3",
     "datei": "./nt9-3.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-4",
     "titel": "Energie und Leistung erfassen",
     "kapitel": "NaTech 9, Kapitel 4",
     "datei": "./nt9-4.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-5",
