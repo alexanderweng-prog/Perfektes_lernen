@@ -12,18 +12,8 @@ const QUELLE = process.argv[2];
 if (!QUELLE) { console.error('Pfad zu fantasy-lernapp fehlt'); process.exit(1); }
 const ZIEL = join(dirname(fileURLToPath(import.meta.url)), '..', 'pakete');
 
-// id, Titel, NaTech-Kapitel
-const KAPITEL = [
-  ['leistung', 'Leistung', 'Vertiefung Leistung'],
-  ['motor', 'Elektromotor und Generator', 'Vertiefung Motor'],
-  ['nt7-1', 'Naturwissenschaften erkunden', 'NaTech 7, Kapitel 1'],
-  ['nt7-3', 'Reize und Sinne untersuchen', 'NaTech 7, Kapitel 3'],
-  ['nt7-4', 'Bewegungen erkunden', 'NaTech 7, Kapitel 4'],
-  ['nt7-5', 'Energie erkunden', 'NaTech 7, Kapitel 5'],
-  ['nt7-7', 'Chemische Reaktionen untersuchen', 'NaTech 7, Kapitel 7'],
-  ['nt8-1', 'Stromkreise untersuchen', 'NaTech 8, Kapitel 1'],
-  ['nt8-5', 'Kräfte, Arbeit und Leistung erforschen', 'NaTech 8, Kapitel 5']
-];
+import { KAPITEL as ALLE, katalogDatei } from './kapitel.mjs';
+const KAPITEL = ALLE.filter(k => k[3] === 'naturalia');
 
 const hilfen = readFileSync(join(QUELLE, 'src/helpers.js'), 'utf8');
 // Hilfsfunktionen der Naturalia-Engine, die die Simulationen brauchen ($id, sl, brow, nf, reduced, tween …)
@@ -44,7 +34,4 @@ export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, ti
   writeFileSync(join(ZIEL, `${id}.js`), out);
   console.log('geschrieben: pakete/' + id + '.js');
 }
-const katalog = `// AUTOMATISCH ERZEUGT mit werkzeuge/naturalia-import.mjs
-export const KATALOG = ${JSON.stringify(KAPITEL.map(([id, titel, kapitel]) => ({ id, titel, kapitel, datei: `./${id}.js` })), null, 2)};
-`;
-writeFileSync(join(ZIEL, 'katalog.js'), katalog);
+writeFileSync(join(ZIEL, 'katalog.js'), katalogDatei());

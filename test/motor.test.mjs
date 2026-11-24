@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 // Tests für den Lern-Motor. Aufruf: node --test test/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -218,8 +219,12 @@ test('Prüfstatus: nur geprüfte Aufgaben kommen in Umlauf', () => {
   }
 });
 
+// Kapitel aus der Lernlandkarte haben noch keine Ergänzungen (siehe README, «Noch offen»); für sie gilt nur die Formatprüfung oben.
+const MIT_ERGAENZUNG = KATALOG.filter(k => existsSync(new URL(`../pakete/ergaenzungen/${k.id}.js`, import.meta.url)));
+
 test('Ergänzungen: alle MC-Optionen erklärt, jedes Lernziel mit mind. 2 Varianten, Format gültig', async () => {
-  for (const k of KATALOG) {
+  assert.ok(MIT_ERGAENZUNG.length >= 9);
+  for (const k of MIT_ERGAENZUNG) {
     const roh = (await import('../pakete/' + k.id + '.js')).default;
     const p = ergaenze(roh, await ladeErgaenzung(k.id), { alleFreigeben: true });
     assert.deepEqual(pruefePaket(p, { durchlaeufe: 15 }), [], k.id);
@@ -274,6 +279,7 @@ test('Naturalia: alle «Kurz testen»-Fragen übernommen', async () => {
     const p = (await import('../pakete/' + k.id + '.js')).default;
     const kt = p.aufgaben.filter(a => a.thema === 'Kurz testen');
     assert.equal(kt.length, p.kompetenzen.length, k.id);
+    assert.ok(Object.keys(p.simulationen).length > 0, k.id + ': keine Simulationen');
     kt.forEach(a => assert.ok(p.lernziele.some(l => l.id === a.lernziel), a.id));
   }
 });
