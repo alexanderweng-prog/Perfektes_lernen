@@ -75,7 +75,7 @@ export const KATALOG = [
     "titel": "Chemische Reaktionen erforschen",
     "kapitel": "NaTech 8, Kapitel 4",
     "datei": "./nt8-4.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt8-5",
@@ -89,14 +89,14 @@ export const KATALOG = [
     "titel": "Optische Phänomene erkunden",
     "kapitel": "NaTech 9, Kapitel 1",
     "datei": "./nt9-1.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-2",
     "titel": "Atommodelle nutzen",
     "kapitel": "NaTech 9, Kapitel 2",
     "datei": "./nt9-2.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-3",
