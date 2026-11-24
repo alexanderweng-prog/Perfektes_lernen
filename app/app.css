@@ -41,3 +41,26 @@ label.einst, .einst label { flex-wrap: wrap; }
 label.einst select, .einst select { flex: 1 1 12rem; min-width: 0; width: 100%; max-width: 100%; font: inherit; min-height: 44px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
 .simbox { border: 2px solid var(--line-soft); border-radius: var(--radius-md); padding: var(--space-3); margin: var(--space-4) 0; background: var(--surface); }
 .simbox .simhost { margin-top: var(--space-3); max-width: 100%; overflow-x: auto; }
+
+/* Simulationen aus der NuT-Lernlandkarte (Regeln von dort übernommen) */
+.flamebox { display: flex; justify-content: center; align-items: flex-end; height: 90px; margin: var(--space-3) 0; border: 3px solid var(--line); border-radius: 12px; background: var(--accent-bg); }
+.flame { width: 44px; height: 64px; margin-bottom: 8px; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; background: var(--pop-yellow); border: 3px solid var(--line); opacity: .12; transition: opacity .3s ease; }
+.flame.on { opacity: 1; background: var(--pop-pink); animation: flick .8s ease-in-out infinite alternate; }
+@keyframes flick { from { transform: scale(1, 1); } to { transform: scale(.92, 1.08); } }
+.eq { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: var(--space-3) 0; font-weight: 700; }
+.eq .term { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border: 3px solid var(--line); border-radius: 12px; background: var(--surface); }
+.eq .term .btn { min-height: 30px; padding: 2px 8px; }
+.eq .arr { font-size: 1.3rem; }
+.lensvg .eline { fill: none; stroke: var(--primary); stroke-width: 4; stroke-linejoin: round; }
+.lensvg .mirror { stroke: var(--line); stroke-width: 5; stroke-linecap: round; }
+.lensvg .ray2 { stroke: var(--primary); stroke-width: 3; fill: none; }
+.lensvg .water { fill: var(--accent-bg); stroke: none; }
+.swatch { width: 100%; height: 72px; margin: var(--space-3) 0; border: 3px solid var(--line); border-radius: 12px; background: rgb(255, 255, 0); }
+.ledbox { display: flex; justify-content: center; align-items: center; height: 80px; margin: var(--space-3) 0; border: 3px solid var(--line); border-radius: 12px; background: var(--accent-bg); }
+.led { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--line); background: var(--subtle); transition: background .25s ease, box-shadow .25s ease; }
+.led.dim { background: var(--pop-yellow); opacity: .55; }
+.led.on { background: var(--pop-yellow); box-shadow: 0 0 22px var(--pop-yellow); }
+.led.dead { background: var(--ink); }
+.dna { margin: var(--space-3) 0; overflow-x: auto; }
+.dstrang { display: flex; gap: 4px; margin: 4px 0; }
+@media (prefers-reduced-motion: reduce) { .flame.on { animation: none; } }

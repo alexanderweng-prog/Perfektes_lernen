@@ -155,10 +155,12 @@ function simHtml(lz, id) {
 
 function beispielHtml(a) {
   const k = a.lernziel.lernkarte, i = a.instanz;
-  const worked = k && k.beispiel ? `<div class="worked"><div class="wgiven">${k.beispiel.given}</div><ol class="wsteps">${k.beispiel.steps.map(s => `<li><div><b>${s[0]}</b><br>${s[1]}</div></li>`).join('')}</ol></div>` : '';
+  const workedHtml = b => b ? `<div class="worked"><div class="wgiven">${b.given}</div><ol class="wsteps">${b.steps.map(s => `<li><div><b>${s[0]}</b><br>${s[1]}</div></li>`).join('')}</ol></div>` : '';
+  const worked = workedHtml(k && k.beispiel);
+  const zusatz = (a.lernziel.zusatzkarten || []).map(z => `<div class="zusatzkarte"><p><b>${esc(z.titel)}</b></p>${z.html ? `<div class="lbody">${z.html}</div>` : ''}${workedHtml(z.beispiel)}</div>`).join('');
   const loes = i.typ === 'mc' ? `<p><b>Richtig:</b> ${i.optionen.find(o => o.richtig).text}</p>` : i.typ === 'zahl' ? '' : `<p><b>Lösung:</b> ${esc(i.musterantwort || '')}</p>`;
   return `<div class="tag">Neu: ${esc(a.lernziel.titel)}</div>
-    ${k && k.html ? `<div class="lbody">${k.html}</div>` : ''}${worked}
+    ${k && k.html ? `<div class="lbody">${k.html}</div>` : ''}${worked}${zusatz}
     <div class="worked"><div class="wgiven"><b>Vorgerechnet:</b> ${i.text}</div>${loes}<div class="lbody">${i.erklaerung || ''}</div></div>
     ${simHtml(a.lernziel, ui.simWahl)}
     <p class="small">Lies das Beispiel genau. Gleich kommt eine ähnliche Aufgabe.</p>
