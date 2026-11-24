@@ -586,4 +586,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-3","titel":"Funktionen des Körpers analysieren","kapitel":"NaTech 8, Kapitel 3"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-3","titel":"Funktionen des Körpers analysieren","kapitel":"NaTech 8, Kapitel 3","audio":"nt8-3"});

@@ -554,4 +554,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-2","titel":"Gewässer-Ökosysteme erforschen","kapitel":"NaTech 8, Kapitel 2"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-2","titel":"Gewässer-Ökosysteme erforschen","kapitel":"NaTech 8, Kapitel 2","audio":"nt8-2"});

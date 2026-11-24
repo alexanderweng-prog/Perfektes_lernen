@@ -574,4 +574,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-4","titel":"Chemische Reaktionen erforschen","kapitel":"NaTech 8, Kapitel 4"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-4","titel":"Chemische Reaktionen erforschen","kapitel":"NaTech 8, Kapitel 4","audio":"nt8-4"});

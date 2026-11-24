@@ -538,4 +538,4 @@ function tween(from, to, ms, cb) {
 }
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-5","titel":"Genetik und Gentechnik verstehen","kapitel":"NaTech 9, Kapitel 5"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt9-5","titel":"Genetik und Gentechnik verstehen","kapitel":"NaTech 9, Kapitel 5","audio":"nt9-5"});

@@ -1,4 +1,4 @@
-// AUTOMATISCH ERZEUGT mit werkzeuge/naturalia-import.mjs aus fantasy-lernapp/src/chapters/nt8-5.js
+// AUTOMATISCH ERZEUGT mit werkzeuge/lernlandkarte-import.mjs aus nut-lernlandkarte/8_5_Kraefte_Arbeit_und_Leistung_erforschen.html
 // Nicht von Hand ändern. Simulationen (SIMS) werden im Browser mit simulationen[id](element) gestartet.
 import { ausNaturalia } from './naturalia-adapter.js';
 
@@ -17,8 +17,8 @@ function seeded(str) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const NICK_A = ['Runen', 'Sternen', 'Nebel', 'Donner', 'Silber', 'Glut', 'Mond', 'Frost', 'Schatten', 'Kristall'];
-const NICK_B = ['Greif', 'Drache', 'Phönix', 'Einhorn', 'Wolf', 'Rabe', 'Eule', 'Golem'];
+const NICK_A = ['Blitz', 'Funke', 'Turbo', 'Watt', 'Joule', 'Volt', 'Ampere', 'Kilo', 'Dynamo', 'Magnet'];
+const NICK_B = ['Fuchs', 'Adler', 'Luchs', 'Falke', 'Dachs', 'Otter', 'Uhu', 'Igel'];
 const newNick = () => NICK_A[Math.floor(Math.random() * NICK_A.length)] + '-' + NICK_B[Math.floor(Math.random() * NICK_B.length)];
 const shuffle = a => {
   a = a.slice();
@@ -41,26 +41,6 @@ const num = (q, unit, ans, hint, explain, o) =>
   Object.assign({ type: 'num', q, unit, ans, hint, explain, tolRel: 0.01, tolAbs: 0 }, o || {});
 // MC: options[0] ist die richtige Antwort, gemischt wird beim Anzeigen
 const mc = (q, options, explain) => ({ type: 'mc', q, options, explain });
-
-const $id = id => document.getElementById(id);
-const nextFrame = f => requestAnimationFrame(() => requestAnimationFrame(f));
-const nf = (host, f) => nextFrame(() => { if (host.isConnected) f(); });
-const reduced = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const sl = (id, label, min, max, step, val, unit) =>
-  `<label class="sl"><span class="sll">${label}: <b class="mono" id="${id}v"></b> ${unit}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></label>`;
-const brow = (name, id, vid) =>
-  `<div class="brow"><span class="bname">${name}</span><div class="btrack"><div class="bfill" id="${id}"></div></div><b class="mono bval" id="${vid}"></b></div>`;
-// Zahl weich hochzählen lassen
-function tween(from, to, ms, cb) {
-  if (reduced() || from === to) { cb(to); return; }
-  const t0 = performance.now();
-  (function step(t) {
-    const p = Math.min(1, (t - t0) / ms);
-    cb(from + (to - from) * (1 - Math.pow(1 - p, 3)));
-    if (p < 1) requestAnimationFrame(step);
-  })(t0);
-}
-
 
 /* ---------- Inhalt: 8_5 Kräfte, Arbeit und Leistung erforschen, 6 Stationen mit je 6 Aufgabenvorlagen ---------- */
 const r2 = x => Math.round(x * 1000) / 1000;
@@ -400,7 +380,7 @@ const LEVELS = [
 
 /* ---------- Thema: 8_5 Kräfte, Arbeit und Leistung erforschen ---------- */
 const TOPIC = {
-  id: 'nt8-5', storeKey: 'halingen-nt8-5-v1', other: { title: 'Leistung (Vertiefung)', href: 'index.html' },
+  id: 'nt8-5', storeKey: 'halingen-nt8-5-v1', other: { title: '9_4 Energie und Leistung erfassen', href: '9_4_Energie_und_Leistung_erfassen.html' },
   title: 'Kräfte, Arbeit und Leistung erforschen', lead: 'Kraft, Weg, Arbeit und Zeit', tag: 'Natur und Technik', cardName: 'Formelkarte',
   tips: ['Welche Kraft wirkt worauf? Zeichne den Kraftpfeil am Körper.', 'Watt ist schon «pro Sekunde».'],
   formulas: [
@@ -564,6 +544,28 @@ const SIMS = {
 };
 
 
+const INTERVALS = [0, 1, 3, 7, 14]; // Tage bis zur nächsten Wiederholung je Box
+const ROUND_SIZE = 6;
+
+/* ---------- Interaktive Simulationen (nur Geometrie, keine Illustrationen) ---------- */
+const $id = id => document.getElementById(id);
+const nextFrame = f => requestAnimationFrame(() => requestAnimationFrame(f));
+const nf = (host, f) => nextFrame(() => { if (host.isConnected) f(); });
+const reduced = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const sl = (id, label, min, max, step, val, unit) =>
+  `<label class="sl"><span class="sll">${label}: <b class="mono" id="${id}v"></b> ${unit}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></label>`;
+const brow = (name, id, vid) =>
+  `<div class="brow"><span class="bname">${name}</span><div class="btrack"><div class="bfill" id="${id}"></div></div><b class="mono bval" id="${vid}"></b></div>`;
+// Zahl weich hochzählen lassen
+function tween(from, to, ms, cb) {
+  if (reduced() || from === to) { cb(to); return; }
+  const t0 = performance.now();
+  (function step(t) {
+    const p = Math.min(1, (t - t0) / ms);
+    cb(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-5","titel":"Kräfte, Arbeit und Leistung erforschen","kapitel":"NaTech 8, Kapitel 5"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"nt8-5","titel":"Kräfte, Arbeit und Leistung erforschen","kapitel":"NaTech 8, Kapitel 5","audio":"nt8-5"});
