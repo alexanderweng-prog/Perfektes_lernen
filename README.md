@@ -49,9 +49,20 @@ npm test
 
 Alle Zahlen sind Annahmen und im Pilot anzupassen.
 
+## Aus Naturalia übernommen
+
+Alle 9 Kapitel mit Lernapp (NaTech 7: 1, 3, 4, 5, 7; NaTech 8: 1, 5; Vertiefungen Leistung und Motor):
+
+- 324 Aufgabenvorlagen der Quests
+- 54 «Kurz testen»-Fragen aus den Lernkarten (je eine pro Quest, Multiple Choice)
+- Lernkarten als Einführung zu den 201 Lernzielen; Karten ohne eigene Aufgaben (Sicherheit, weitere Beispiele) erscheinen im Schritt «Beispiel» beim nächstliegenden Lernziel
+- 56 Simulationen
+
+Die übrigen NaTech-Kapitel haben in Naturalia noch keine Inhalte (Nebelreiche) und fehlen deshalb auch hier.
+
 ## Ergänzte Inhalte
 
-- 660 Erklärungen zu falschen Antwortoptionen (alle 220 Multiple-Choice-Aufgaben aus Naturalia).
+- 660 Erklärungen zu falschen Antwortoptionen (alle 220 Multiple-Choice-Aufgaben aus Naturalia) und 162 zu den 54 «Kurz testen»-Fragen.
 - 138 neue Aufgabenvarianten, sodass jedes der 201 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
 - 56 Fragen zu den Naturalia-Simulationen («Simulation mit Frage», nur im freiwilligen Zusatzblock).
 - Alles ist Entwurf, bis eine Lehrperson es im Dashboard unter «Neue Inhalte prüfen» freigibt.

@@ -3,6 +3,8 @@
 //   Station (Quest)                 → Kompetenz
 //   Lernkarte, auf die Vorlagen verweisen (t.learn) → Lernziel (die Lernkarte dient als Einführung)
 //   Aufgabenvorlage (make)          → Aufgabe; jede Vorlage ist eine Variantengruppe, make() liefert neue Zahlen
+//   Kontrollfrage einer Lernkarte (check, «Kurz testen») → Multiple-Choice-Aufgabe
+//   übrige Lernkarten (Sicherheit, weitere Beispiele) → zusatzkarten des nächsten Lernziels, Simulationen → simulationen
 
 const slug = s => s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
@@ -37,18 +39,36 @@ export function ausNaturalia({ STATIONS, TOPIC, SIMS = {} }, { id, titel, kapite
         erzeuge: () => wandle(t.make())
       });
     }
-    // Simulationen: Karte mit sim → das Lernziel derselben Station, dessen Lernkarte am nächsten davor (sonst danach) liegt
+    // Lernkarten ohne eigene Aufgaben (Simulationen, «Kurz testen», Sicherheit, weitere Beispiele) gehören zum Lernziel derselben Station,
+    // dessen Lernkarte am nächsten davor liegt (sonst danach).
     const karten = s.lesson || [];
-    karten.forEach((c, i) => {
-      if (!c.sim || !SIMS[c.sim]) return;
-      let lzId = null;
-      for (let d = 0; d < karten.length && !lzId; d++) {
-        for (const j of [i - d, i + d]) { if (j >= 0 && j < karten.length && lzVon.has(karten[j].h)) { lzId = lzVon.get(karten[j].h); break; } }
+    const naechstes = i => {
+      for (let d = 0; d < karten.length; d++) {
+        for (const j of [i - d, i + d]) { if (j >= 0 && j < karten.length && lzVon.has(karten[j].h)) return lernziele.find(l => l.id === lzVon.get(karten[j].h)); }
       }
-      const lz = lernziele.find(l => l.id === lzId);
+      return lernziele.find(l => l.kompetenz === kId) || null;
+    };
+    karten.forEach((c, i) => {
+      const lz = naechstes(i);
       if (!lz) return;
-      lz.simulationen = lz.simulationen || [];
-      if (!lz.simulationen.some(x => x.id === c.sim)) lz.simulationen.push({ id: c.sim, titel: c.h, html: c.body || '' });
+      if (c.sim && SIMS[c.sim]) {
+        lz.simulationen = lz.simulationen || [];
+        if (!lz.simulationen.some(x => x.id === c.sim)) lz.simulationen.push({ id: c.sim, titel: c.h, html: c.body || '' });
+      } else if (!lzVon.has(c.h) && (c.body || c.worked) && !c.check) {
+        lz.zusatzkarten = lz.zusatzkarten || [];
+        lz.zusatzkarten.push({ titel: c.h, html: c.body || '', beispiel: c.worked || null });
+      }
+      // Kontrollfrage der Lernkarte («Kurz testen») → eigene Multiple-Choice-Aufgabe
+      if (c.check) {
+        const k = c.check, vId = `${s.id}-kt${i}`;
+        aufgaben.push({
+          id: `${id}.${vId}`, lernziel: lz.id, typ: 'mc', schwierigkeit: 2,
+          variantengruppe: `${id}.${vId}`, thema: 'Kurz testen',
+          quelle: `${kapitel} · ${TOPIC.title} · Quest ${s.nr} · Kurz testen`,
+          pruefstatus,
+          erzeuge: () => wandle({ type: 'mc', q: k.q, options: k.options, explain: k.explain })
+        });
+      }
     });
   }
   const simulationen = {};

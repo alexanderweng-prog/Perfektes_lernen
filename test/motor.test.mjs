@@ -268,3 +268,12 @@ test('Simulationen: nur im Zusatzblock, nie im Wiederholungsblock', async () => 
   const vorher = JSON.stringify(m.lernziele[sims[0].schritt.lernziel].karte);
   assert.equal(JSON.stringify(zusatz.modell.lernziele[sims[0].schritt.lernziel].karte), vorher);
 });
+
+test('Naturalia: alle «Kurz testen»-Fragen übernommen', async () => {
+  for (const k of KATALOG) {
+    const p = (await import('../pakete/' + k.id + '.js')).default;
+    const kt = p.aufgaben.filter(a => a.thema === 'Kurz testen');
+    assert.equal(kt.length, p.kompetenzen.length, k.id);
+    kt.forEach(a => assert.ok(p.lernziele.some(l => l.id === a.lernziel), a.id));
+  }
+});
