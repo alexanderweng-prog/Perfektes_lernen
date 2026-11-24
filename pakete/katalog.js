@@ -117,14 +117,14 @@ export const KATALOG = [
     "titel": "Genetik und Gentechnik verstehen",
     "kapitel": "NaTech 9, Kapitel 5",
     "datei": "./nt9-5.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-6",
     "titel": "Evolution nachvollziehen",
     "kapitel": "NaTech 9, Kapitel 6",
     "datei": "./nt9-6.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-7",
