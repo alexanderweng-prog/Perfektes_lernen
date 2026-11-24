@@ -131,14 +131,14 @@ export const KATALOG = [
     "titel": "Land-Ökosysteme erforschen",
     "kapitel": "NaTech 9, Kapitel 7",
     "datei": "./nt9-7.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "nt9-8",
     "titel": "Stoffkreisläufe erkunden",
     "kapitel": "NaTech 9, Kapitel 8",
     "datei": "./nt9-8.js",
-    "ergaenzung": false
+    "ergaenzung": true
   },
   {
     "id": "leistung",
