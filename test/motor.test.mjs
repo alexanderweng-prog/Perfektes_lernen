@@ -283,3 +283,14 @@ test('Naturalia: alle «Kurz testen»-Fragen übernommen', async () => {
     kt.forEach(a => assert.ok(p.lernziele.some(l => l.id === a.lernziel), a.id));
   }
 });
+
+test('Simulationen: zu jeder Simulation gibt es eine Frage', async () => {
+  for (const k of KATALOG) {
+    const roh = (await import('../pakete/' + k.id + '.js')).default;
+    const p = ergaenze(roh, await ladeErgaenzung(k.id), { alleFreigeben: true });
+    const zugeordnet = new Set(p.lernziele.flatMap(l => (l.simulationen || []).map(s => s.id)));
+    const mitFrage = new Set(p.aufgaben.filter(a => a.simulation).map(a => a.simulation));
+    const fehlen = [...zugeordnet].filter(id => !mitFrage.has(id));
+    assert.deepEqual(fehlen, [], k.id + ': Simulationen ohne Frage');
+  }
+});

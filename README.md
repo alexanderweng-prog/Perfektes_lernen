@@ -70,7 +70,7 @@ Alle Zahlen sind Annahmen und im Pilot anzupassen.
 
 - Erklärungen zu jeder falschen Antwortoption aller Multiple-Choice-Aufgaben: 822 in den 9 Naturalia-Kapiteln, 1443 in den 13 Kapiteln aus der Lernlandkarte.
 - 251 neue Aufgabenvarianten (138 + 113), sodass jedes der 515 Lernziele mindestens zwei Variantengruppen hat (Multiple Choice, Zahl mit Zufallswerten, Zuordnen, Lückentext, Reihenfolge).
-- 56 Fragen zu den Naturalia-Simulationen («Simulation mit Frage», nur im freiwilligen Zusatzblock). Die 89 Simulationen der Lernlandkarte haben noch keine Fragen; sie erscheinen im Schritt «Beispiel».
+- Zu jeder Simulation eine Frage («Simulation mit Frage», nur im freiwilligen Zusatzblock): 56 in `ergaenzungen/simulationen.js`, 89 in `ergaenzungen/simulationen-lernlandkarte.js`.
 - Alles ist Entwurf, bis eine Lehrperson es im Dashboard unter «Neue Inhalte prüfen» freigibt.
 
 ## Simulationen
@@ -79,6 +79,5 @@ Die 56 Simulationen aus Naturalia werden mit importiert und je einem Lernziel zu
 
 ## Noch offen
 
-- Fragen zu den 89 Simulationen aus der Lernlandkarte (Zusatzblock).
 - Pilot mit einer Klasse (4–6 Wochen), danach Parameter in `motor/einstellungen.js` anpassen.
 - Kanti-Trainer und Mathe als Pakete.
