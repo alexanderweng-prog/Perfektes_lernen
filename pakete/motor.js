@@ -677,4 +677,4 @@ const SIMS = {
 
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"motor","titel":"Elektromotor und Generator","kapitel":"Vertiefung Motor"});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"motor","titel":"Elektromotor und Generator","kapitel":"Vertiefung Motor","audio":null});

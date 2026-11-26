@@ -4,7 +4,7 @@
 // Ergebnis: pakete/<id>.js pro Kapitel und pakete/katalog.js
 // Die erzeugten Dateien nicht von Hand ändern, sondern das Kapitel in Naturalia ändern und neu importieren.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,7 +29,7 @@ ${hilfen}
 ${simHilfen}
 ${kapitelCode}
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, titel, kapitel })});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, ${JSON.stringify({ id, titel, kapitel, audio: existsSync(join(ZIEL, '..', 'audio', id)) ? id : null })});
 `;
   writeFileSync(join(ZIEL, `${id}.js`), out);
   console.log('geschrieben: pakete/' + id + '.js');
