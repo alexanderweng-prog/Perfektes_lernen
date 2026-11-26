@@ -294,3 +294,14 @@ test('Simulationen: zu jeder Simulation gibt es eine Frage', async () => {
     assert.deepEqual(fehlen, [], k.id + ': Simulationen ohne Frage');
   }
 });
+
+test('Vorlesen: jede Lernkarte hat eine Aufnahme', async () => {
+  const fehlen = [];
+  for (const k of KATALOG) {
+    const p = (await import('../pakete/' + k.id + '.js')).default;
+    for (const l of p.lernziele) for (const c of [l.lernkarte, ...(l.zusatzkarten || [])]) {
+      if (c && !(c.audio && existsSync(new URL('../audio/' + c.audio, import.meta.url)))) fehlen.push(k.id + ': ' + c.titel);
+    }
+  }
+  assert.deepEqual(fehlen, []);
+});

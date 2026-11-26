@@ -29,7 +29,7 @@ Auf GitHub Pages: Repository-Wurzel veröffentlichen, die App liegt unter `/app/
 
 ## Vorlesen
 
-Bei jeder Lernkarte und jeder Aufgabe gibt es einen Knopf «Vorlesen». Für die Lernkarten der 20 Kapitel aus der Lernlandkarte gibt es aufgenommene Sprechtexte (`audio/<kapitel>/<Station>-c<Karte>-w.mp3`, 484 Dateien, rund 100 MB). Alles andere liest die Browser-Stimme (deutsch) vor, mit den Aussprache-Regeln der Lernlandkarte (Einheiten, Formeln, Hochzahlen). Code: `app/vorlesen.js`.
+Bei jeder Lernkarte und jeder Aufgabe gibt es einen Knopf «Vorlesen». Jede Lernkarte hat eine Aufnahme (`audio/<kapitel>/<Station>-c<Karte>-w.mp3`, 528 Dateien): 484 aus der Lernlandkarte, 44 für Leistung und Motor neu vertont (ElevenLabs über Plazma, Stimme «Mia Swiss», Pausen gekürzt). Ein Test prüft, dass keine Karte ohne Aufnahme ist. Alles andere liest die Browser-Stimme (deutsch) vor, mit den Aussprache-Regeln der Lernlandkarte (Einheiten, Formeln, Hochzahlen). Code: `app/vorlesen.js`.
 
 ## Inhalte neu übernehmen
 
