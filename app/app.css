@@ -2,7 +2,12 @@
 body { background: var(--bg); color: var(--text); }
 .top .lead { color: var(--header-muted); margin-top: var(--space-2); }
 .top .toprow { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
-.stack-v { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-5); }
+.stack-v { display: flex; flex-direction: column; gap: var(--space-4); margin-top: 0; }
+/* Abstände: Titel nicht am Logo kleben, kein Leerraum oben in Karten, Hinweis nicht am Knopf */
+.top h1 { margin-top: var(--space-4); }
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.btn.block + .small, .btn.block + p { margin-top: var(--space-3); }
 .bignum { font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 700; line-height: 1; }
 .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .kpis > div { border: 2px solid var(--line-soft); border-radius: var(--radius-sm); padding: var(--space-3); }
