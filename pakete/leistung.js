@@ -743,4 +743,4 @@ const SIMS = {
 
 
 
-export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"leistung","titel":"Leistung","kapitel":"Vertiefung Leistung","audio":null});
+export default ausNaturalia({ STATIONS, TOPIC, SIMS }, {"id":"leistung","titel":"Leistung","kapitel":"Vertiefung Leistung","audio":"leistung"});
