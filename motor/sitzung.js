@@ -4,8 +4,9 @@
 // - Neues Lernziel: Beispiel → Aufgabe mit Hilfe → Aufgabe ohne Hilfe (Fading), mit Abstand dazwischen.
 // - Falsch gelöst: gleiches Lernziel kommt später in der Sitzung nochmals, möglichst in anderer Variante.
 // - Pausenhinweis, wenn die Fehlerquote deutlich über dem eigenen Schnitt der Sitzung liegt.
+// - Kontrollfragen (Pilot-Messung): wenige Lernziele zusätzlich nach festem Abstand, ohne Einfluss auf den Planer.
 
-import { EINSTELLUNGEN as E } from './einstellungen.js';
+import { EINSTELLUNGEN as E, EINSTELLUNGEN_VERSION } from './einstellungen.js';
 import { instanz, mischen } from './format.js';
 import { bewerte } from './bewerten.js';
 import { istNeu, istFaellig, abrufWahrscheinlichkeit, verbuche, eintrag } from './schuelermodell.js';
@@ -29,11 +30,19 @@ export function zaehleFaellige(paket, modell, { jetzt = new Date(), freigabe } =
   return freigegebeneLernziele(paket, freigabe).filter(l => istFaellig(modell, l.id, jetzt)).length;
 }
 
-// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb
-export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], zufall = Math.random, simulation = false } = {}) {
+// Geprüfte Aufgaben eines Lernziels, die in einer Phase in Frage kommen.
+// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb.
+function kandidatenFuer(paket, lernzielId, simulation) {
   const geprueft = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft');
   const passend = geprueft.filter(a => !!a.simulation === simulation);
-  const alle = passend.length ? passend : geprueft;
+  return passend.length ? passend : geprueft;
+}
+const gruppenZahl = (paket, lernzielId) => new Set(kandidatenFuer(paket, lernzielId, false).map(a => a.variantengruppe)).size;
+
+// ohneGruppen: möglichst meiden (Rückfall erlaubt). gesperrt: nie (z. B. die vorgerechnete Aufgabe aus dem Beispiel).
+export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], gesperrt = [], zufall = Math.random, simulation = false } = {}) {
+  const alle = kandidatenFuer(paket, lernzielId, simulation).filter(a => !gesperrt.includes(a.variantengruppe));
+  if (!alle.length) return undefined;
   const andere = alle.filter(a => !ohneGruppen.includes(a.variantengruppe));
   const pool = andere.length ? andere : alle;
   const abstand = a => Math.abs(a.schwierigkeit - niveau);
@@ -43,8 +52,9 @@ export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], zuf
 }
 
 export class Sitzung {
-  constructor(paket, modell, { art = 'block', freigabe = null, uhr = () => new Date(), zufall = Math.random, id } = {}) {
+  constructor(paket, modell, { art = 'block', freigabe = null, uhr = () => new Date(), zufall = Math.random, id, appVersion = null } = {}) {
     this.paket = paket; this.modell = modell; this.art = art; this.uhr = uhr; this.zufall = zufall;
+    this.versionen = { app: appVersion, einstellungen: EINSTELLUNGEN_VERSION }; // in jedem Protokolleintrag
     this.id = id || uhr().getTime().toString(36) + Math.floor(zufall() * 1e6).toString(36);
     this.start = uhr();
     this.kompetenzVon = new Map(paket.lernziele.map(l => [l.id, l.kompetenz]));
@@ -56,9 +66,10 @@ export class Sitzung {
     this.nachPause = false; this.pauseHinweisNach = null; this.beendet = false; this.aktuell = null;
     this.nochmalsGeplant = new Set();
     this.gruppenInSitzung = new Map(); // Lernziel → benutzte Variantengruppen
+    this.vorgerechnet = new Map();     // Lernziel → im Beispiel vorgerechnete Variantengruppe
     this.offen = this.plane(freigabe);
     // geschätzte Zahl Aufgaben: fällige + pro neuem Lernziel zwei (mit Hilfe, ohne Hilfe)
-    this.geplant = this.offen.filter(s => s.phase === 'faellig').length + 2 * this.offen.filter(s => s.phase === 'beispiel').length;
+    this.geplant = this.offen.filter(s => s.phase === 'faellig' || s.phase === 'kontrolle').length + 2 * this.offen.filter(s => s.phase === 'beispiel').length;
   }
 
   plane(freigabe) {
@@ -67,9 +78,14 @@ export class Sitzung {
     const offen = [];
     let platz = Infinity, maxNeu = E.zusatzMaxNeueLernziele;
     if (this.art === 'block') {
-      const faellig = lz.filter(l => istFaellig(this.modell, l.id, jetzt))
+      // Kontrollfragen zuerst. Ist dasselbe Lernziel auch fällig, wartet die FSRS-Wiederholung bis zur nächsten Sitzung
+      // (sonst wäre sie direkt nach der Kontrollfrage kein unabhängiger Abruf mehr).
+      const kontrolle = lz.map(l => ({ l, stichtag: kontrolleStichtag(this.modell, l.id, jetzt) }))
+        .filter(x => x.stichtag !== null).slice(0, E.kontrolle.maxProBlock);
+      for (const x of kontrolle) offen.push({ lernziel: x.l.id, phase: 'kontrolle', stichtag: x.stichtag, bereitAb: 0 });
+      const faellig = lz.filter(l => istFaellig(this.modell, l.id, jetzt) && !kontrolle.some(x => x.l === l))
         .sort((a, b) => abrufWahrscheinlichkeit(this.modell, a.id, jetzt) - abrufWahrscheinlichkeit(this.modell, b.id, jetzt))
-        .slice(0, E.blockMaxAufgaben);
+        .slice(0, E.blockMaxAufgaben - offen.length);
       for (const l of verzahne(faellig, l => l.kompetenz)) offen.push({ lernziel: l.id, phase: 'faellig', bereitAb: 0 });
       platz = E.blockMaxAufgaben - offen.length;
       maxNeu = E.blockMaxNeueLernziele;
@@ -105,7 +121,7 @@ export class Sitzung {
     // Vorrang: andere Kompetenz als zuletzt (Interleaving), darin Fading-/Nochmals-Schritte vor fälligen
     const letzte = this.aktuell && this.aktuell.schritt;
     const istAnders = s => !letzte || (s.lernziel !== letzte.lernziel && this.kompetenzVon.get(s.lernziel) !== this.kompetenzVon.get(letzte.lernziel));
-    const zeitkritisch = s => s.phase !== 'faellig';
+    const zeitkritisch = s => s.phase !== 'faellig' && s.phase !== 'kontrolle';
     const nachBereit = (a, b) => a.bereitAb - b.bereitAb;
     const schritt = [
       kandidaten.filter(s => istAnders(s) && zeitkritisch(s)).sort(nachBereit),
@@ -118,13 +134,19 @@ export class Sitzung {
     const benutzt = this.gruppenInSitzung.get(schritt.lernziel) || [];
     const e = eintrag(this.modell, schritt.lernziel);
     const ohneGruppen = [...benutzt, ...(e && e.letzteGruppe ? [e.letzteGruppe] : [])];
-    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
+    // «ohne Hilfe» und «nochmals» dürfen die im Beispiel vorgerechnete Aufgabe nie bringen
+    const vorgerechnet = this.vorgerechnet.get(schritt.lernziel);
+    const gesperrt = vorgerechnet && (schritt.phase === 'neu' || schritt.phase === 'nochmals') ? [vorgerechnet] : [];
+    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, gesperrt, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
     this.gruppenInSitzung.set(schritt.lernziel, [...benutzt, aufgabe.variantengruppe]);
-    const abruf = schritt.phase === 'faellig' || schritt.phase === 'neu';
+    // Hat das Lernziel nur eine Variantengruppe, wird im Beispiel nichts vorgerechnet (sonst käme die Lösung später wieder)
+    const zeigeVorgerechnet = schritt.phase === 'beispiel' && gruppenZahl(this.paket, schritt.lernziel) > 1;
+    if (zeigeVorgerechnet) this.vorgerechnet.set(schritt.lernziel, aufgabe.variantengruppe);
+    const abruf = schritt.phase === 'faellig' || schritt.phase === 'neu' || schritt.phase === 'kontrolle';
     this.aktuell = {
       schritt, aufgabe, instanz: instanz(aufgabe, this.zufall), seit: this.uhr(),
       lernziel: this.paket.lernziele.find(l => l.id === schritt.lernziel),
-      zeigeHilfe: schritt.phase === 'mitHilfe',
+      zeigeHilfe: schritt.phase === 'mitHilfe', zeigeVorgerechnet,
       fragSicherheit: abruf && this.zufall() < E.anteilSicherheitsfrage
     };
     this.pos++;
@@ -132,46 +154,91 @@ export class Sitzung {
     return this.aktuell;
   }
 
-  // Nach einem Beispiel (keine Antwort)
+  // Nach einem Beispiel (keine Antwort). Gibt den Protokolleintrag mit der Lesezeit zurück.
   weiter() {
-    const s = this.aktuell.schritt;
-    if (s.phase === 'beispiel') this.offen.push({ lernziel: s.lernziel, phase: 'mitHilfe', bereitAb: this.pos + E.abstandFading });
+    const a = this.aktuell, s = a.schritt, jetzt = this.uhr();
+    if (s.phase !== 'beispiel') return null;
+    this.offen.push({ lernziel: s.lernziel, phase: 'mitHilfe', bereitAb: this.pos + E.abstandFading });
+    const p = {
+      sitzung: this.id, aufgabe: a.zeigeVorgerechnet ? a.aufgabe.id : null, lernziel: s.lernziel, typ: 'beispiel', phase: 'beispiel',
+      zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit, ...this.versionen
+    };
+    this.protokoll.push(p);
+    return p;
   }
 
   // Antwort auf den aktuellen Schritt. Gibt die Bewertung plus Zusatzinfos zurück.
+  // Hinweisleiter: Bei Zahlaufgaben sind nach einem Fehler weitere Versuche erlaubt (E.maxVersuche).
+  // Nur der erste Versuch zählt für Planer, Pausenhinweis und «nochmals»; spätere ergänzen nur den Protokolleintrag.
+  // hilfsstufe = höchste gezeigte Stufe: 0 keine, 1 Denkanstoss, 2 Hilfe, 3 Lösung.
   antworte(antwort, sicherheit = null) {
     const a = this.aktuell;
     const b = bewerte(a.instanz, antwort);
     if (!b.gueltig) return b;
     const s = a.schritt, jetzt = this.uhr();
-    const zaehltFuerPlaner = s.phase === 'faellig' || s.phase === 'neu';
-    this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
-    const e = this.modell.lernziele[s.lernziel];
-    this.modell.lernziele[s.lernziel] = { ...e, letzteGruppe: a.aufgabe.variantengruppe };
+    a.versuch = (a.versuch || 0) + 1;
+    const nochVersuch = !b.richtig && a.versuch < (E.maxVersuche[a.instanz.typ] || 1);
+    if (!b.richtig) a.hilfsstufe = nochVersuch ? a.versuch : 3;
+    let xp, pauseHinweis = false;
 
-    // Fading weiterführen
-    if (s.phase === 'mitHilfe') this.offen.push({ lernziel: s.lernziel, phase: 'neu', bereitAb: this.pos + E.abstandFading });
-    // Falsch: später nochmals, andere Variante. Höchstens einmal pro Lernziel und Sitzung.
-    if (!b.richtig && s.phase !== 'nochmals' && s.phase !== 'mitHilfe' && !this.nochmalsGeplant.has(s.lernziel)) {
-      this.nochmalsGeplant.add(s.lernziel);
-      this.offen.push({ lernziel: s.lernziel, phase: 'nochmals', bereitAb: this.pos + E.abstandNachFehler });
+    if (a.versuch === 1) {
+      const zaehltFuerPlaner = s.phase === 'faellig' || s.phase === 'neu';
+      // vorhergesagte Abrufwahrscheinlichkeit (FSRS) vor dieser Antwort; null, solange es noch keine Planer-Karte gibt
+      const pVorher = istNeu(this.modell, s.lernziel) ? null : Math.round(abrufWahrscheinlichkeit(this.modell, s.lernziel, jetzt) * 1e4) / 1e4;
+      const kontrolle = s.phase === 'kontrolle' ? eintrag(this.modell, s.lernziel).kontrolle : null;
+      // Kontrollfragen ändern das Modell nicht (weder Planer noch Niveau noch Zähler)
+      if (!kontrolle) this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
+      const e = { ...this.modell.lernziele[s.lernziel], letzteGruppe: a.aufgabe.variantengruppe };
+      if (kontrolle) e.kontrolle = { ...kontrolle, offen: kontrolle.offen.filter(t => t > s.stichtag) };
+      // Erster Abruf ohne Hilfe: per Zufall für die Kontrollfragen auswählen
+      if (s.phase === 'neu' && !e.kontrolle && E.kontrolle.anteil > 0 && this.zufall() < E.kontrolle.anteil) {
+        e.kontrolle = { ab: jetzt.toISOString(), offen: [...E.kontrolle.tage] };
+      }
+      this.modell.lernziele[s.lernziel] = e;
+
+      // Fading weiterführen
+      if (s.phase === 'mitHilfe') this.offen.push({ lernziel: s.lernziel, phase: 'neu', bereitAb: this.pos + E.abstandFading });
+      // Falsch: später nochmals, andere Variante. Höchstens einmal pro Lernziel und Sitzung.
+      a.nochmals = null;
+      if (!b.richtig && !['nochmals', 'mitHilfe', 'kontrolle'].includes(s.phase) && !this.nochmalsGeplant.has(s.lernziel)) {
+        this.nochmalsGeplant.add(s.lernziel);
+        this.offen.push({ lernziel: s.lernziel, phase: 'nochmals', bereitAb: this.pos + E.abstandNachFehler });
+        a.nochmals = this.nochmalsForm(s.lernziel);
+      }
+
+      xp = b.richtig ? (E.xp[s.phase] ?? 0) : 0;
+      a.protokoll = {
+        sitzung: this.id, aufgabe: a.aufgabe.id, lernziel: s.lernziel, variantengruppe: a.aufgabe.variantengruppe,
+        typ: a.instanz.typ, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
+        gewaehlt: typeof b.gewaehlt === 'number' ? b.gewaehlt : JSON.stringify(b.gewaehlt ?? null).slice(0, 200),
+        sicherheit, nachPause: this.nachPause, zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit, pVorher,
+        kontrolle: kontrolle ? s.stichtag : null, kontrolleIst: kontrolle ? Math.round((jetzt - new Date(kontrolle.ab)) / 864e5 * 10) / 10 : null,
+        ...this.versionen
+      };
+      this.protokoll.push(a.protokoll);
+
+      if (s.phase !== 'mitHilfe') {
+        this.ergebnisse.push(b.richtig);
+        if (this.pauseHinweisNach === null && pauseNoetig(this.ergebnisse)) { this.pauseHinweisNach = this.ergebnisse.length; pauseHinweis = true; }
+      }
+    } else {
+      xp = b.richtig ? E.xp.nachHinweis : 0;
     }
-
-    const xp = b.richtig ? (E.xp[s.phase] ?? 0) : 0;
+    Object.assign(a.protokoll, { versuch: a.versuch, hilfsstufe: a.hilfsstufe || 0, richtigAmEnde: b.richtig });
     this.xp += xp;
-    this.protokoll.push({
-      sitzung: this.id, aufgabe: a.aufgabe.id, lernziel: s.lernziel, variantengruppe: a.aufgabe.variantengruppe,
-      typ: a.instanz.typ, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
-      gewaehlt: typeof b.gewaehlt === 'number' ? b.gewaehlt : JSON.stringify(b.gewaehlt ?? null).slice(0, 200),
-      sicherheit, nachPause: this.nachPause, zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit
-    });
+    return {
+      ...b, xp, fehlvorstellung: a.versuch === 1 && !b.richtig && sicherheit === 'sicher', pauseHinweis,
+      nochmals: a.nochmals, versuch: a.versuch, hilfsstufe: a.hilfsstufe || 0, nochVersuch, fertig: !nochVersuch
+    };
+  }
 
-    let pauseHinweis = false;
-    if (s.phase !== 'mitHilfe') {
-      this.ergebnisse.push(b.richtig);
-      if (this.pauseHinweisNach === null && pauseNoetig(this.ergebnisse)) { this.pauseHinweisNach = this.ergebnisse.length; pauseHinweis = true; }
-    }
-    return { ...b, xp, fehlvorstellung: !b.richtig && sicherheit === 'sicher', pauseHinweis };
+  // Kommt die Wiederholung in anderer Form? Nur wenn es eine Variantengruppe gibt, die in dieser Sitzung
+  // noch nicht dran war und nicht gesperrt ist. Sonst kommt dieselbe Aufgabe (bei Zahlaufgaben evtl. mit neuen Zahlen).
+  nochmalsForm(lernzielId) {
+    const benutzt = this.gruppenInSitzung.get(lernzielId) || [];
+    const frei = kandidatenFuer(this.paket, lernzielId, false)
+      .some(a => !benutzt.includes(a.variantengruppe) && a.variantengruppe !== this.vorgerechnet.get(lernzielId));
+    return frei ? 'andereForm' : 'gleicheForm';
   }
 
   // Das Kind entscheidet nach dem Pausenhinweis selbst
@@ -188,9 +255,19 @@ export class Sitzung {
     return {
       id: this.id, art: this.art, start: this.start.toISOString(), ende: this.uhr().toISOString(),
       aufgaben: this.aufgabenZahl, abrufe: this.ergebnisse.length, richtig, xp: this.xp, blockXp,
-      pauseHinweisNach: this.pauseHinweisNach, abgebrochenNachPause: !!this.abgebrochenNachPause
+      pauseHinweisNach: this.pauseHinweisNach, abgebrochenNachPause: !!this.abgebrochenNachPause, ...this.versionen
     };
   }
+}
+
+// Kontrollfrage fällig? Gibt den Stichtag (z. B. 14) zurück oder null. Ein Stichtag gilt bis fensterTage danach,
+// verpasste Stichtage werden übersprungen.
+export function kontrolleStichtag(modell, lernzielId, jetzt) {
+  const k = (eintrag(modell, lernzielId) || {}).kontrolle;
+  if (!k) return null;
+  const tage = (jetzt - new Date(k.ab)) / 864e5;
+  const t = k.offen.find(t => tage <= t + E.kontrolle.fensterTage);
+  return t !== undefined && tage >= t ? t : null;
 }
 
 // Fehlerquote der letzten N Aufgaben deutlich über dem eigenen bisherigen Schnitt in dieser Sitzung

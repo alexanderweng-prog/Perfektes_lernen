@@ -13,7 +13,8 @@ import { lies, stoppeVorlesen, vorlesenLaeuft, vorlesenMoeglich } from './vorles
 
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
 const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
-const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals, andere Variante', simulation: 'Simulation' };
+const APP_VERSION = '2026-11-27'; // bei jeder Veröffentlichung anpassen, landet in jedem Protokolleintrag
+const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals', kontrolle: 'Wiederholen', simulation: 'Simulation' };
 const STATUS = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt' };
 
 const $app = document.getElementById('app');
@@ -64,7 +65,7 @@ const fuss = () => `<footer class="foot"><div class="logochip"><img src="logo.pn
     : 'Dein Lernstand wird nur auf diesem Gerät im Browser gespeichert.'}</p></footer>`;
 
 function stufeHtml() {
-  return `<div class="row"><span class="small">Stufe ${stufe(daten.xp)} · ${daten.xp} XP</span><span class="small">Serie ${daten.serie.wert} ${daten.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span></div>
+  return `<div class="row"><span class="small">Stufe ${stufe(daten.xp)} · ${daten.xp} XP</span>${E.schalter.serie ? `<span class="small">Serie ${daten.serie.wert} ${daten.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span>` : ''}</div>
     <div class="xpbar light"><div style="width:${Math.round(fortschrittStufe(daten.xp) * 100)}%"></div></div>`;
 }
 
@@ -77,7 +78,7 @@ function startHtml() {
   const zaehl = { neu: 0, wackelt: 0, sitzt: 0 };
   lz.forEach(l => zaehl[status(daten.modell, l.id, jetzt)]++);
   const block = faellig || neu
-    ? `<div class="kpis"><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div><div><b>${daten.serie.wert}</b><span class="small">Serie</span></div></div>
+    ? `<div class="kpis"${E.schalter.serie ? '' : ' style="grid-template-columns:repeat(2,minmax(0,1fr))"'}><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div>${E.schalter.serie ? `<div><b>${daten.serie.wert}</b><span class="small">Serie</span></div>` : ''}</div>
        <p style="margin:var(--space-3) 0">${faellig ? 'Zuerst kommen die fälligen Lernziele, danach höchstens ' + E.blockMaxNeueLernziele + ' neue.' : 'Heute ist nichts fällig. Du lernst ' + Math.min(neu, E.blockMaxNeueLernziele) + ' neue Lernziele kennen.'}</p>
        <button class="btn btn-primary block" data-act="block">Wiederholungsblock starten</button>
        <p class="small">Höchstens ${E.blockMaxAufgaben} Aufgaben oder ca. ${E.blockMaxMinuten} Minuten. Kürzer ist auch gut.</p>`
@@ -94,8 +95,8 @@ function startHtml() {
   }).join('');
   const optionen = PAKETE.filter(p => !p.versteckt || p.id === paket.id).map(p => `<option value="${p.id}" ${p.id === paket.id ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
   const freigabe = paket.kompetenzen.map(k => `<label><input type="checkbox" data-act="freigabe" value="${k.id}" ${!daten.freigabe.length || daten.freigabe.includes(k.id) ? 'checked' : ''}> ${esc(k.titel)}</label>`).join('');
-  const bonus = daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
-  const wertungHtml = wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
+  const bonus = E.schalter.bonus && daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
+  const wertungHtml = E.schalter.klassenwertung && wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
       <p class="small">Gewertet wird, welcher Anteil der Klasse den Wiederholungsblock gemacht hat.</p>
       <ol class="lzlist">${wertung.slice(0, 8).map(w => `<li${w.eigene ? ' style="font-weight:800"' : ''}><span>${esc(w.team)}${w.eigene ? ' (deine Klasse)' : ''}</span><span class="mono">${Math.round((w.anteil || 0) * 100)} %</span></li>`).join('')}</ol></section>` : '';
   const syncHtml = syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)} Das wird nachgeholt.</div></div>` : '';
@@ -122,7 +123,7 @@ function eingabeHtml(a, gesperrt) {
     case 'mc': return `<div class="opts">${i.optionen.map((o, k) => {
       let cls = '';
       if (ui.auswahl === o.nr) cls += ' gewaehlt';
-      if (ui.ergebnis) cls += o.richtig ? ' ok' : ui.auswahl === o.nr ? ' no' : '';
+      if (ui.ergebnis) cls += o.richtig && loesungSichtbar() ? ' ok' : !o.richtig && ui.auswahl === o.nr ? ' no' : '';
       return `<button class="opt${cls}" data-act="mc" data-nr="${o.nr}" ${d}><span class="ltr">${'ABCDEF'[k]}</span><span>${o.text}</span></button>`;
     }).join('')}</div>`;
     case 'zahl': return `<form class="ansrow" data-act="form"><input id="ein" class="numin" inputmode="decimal" autocomplete="off" aria-label="Antwort" value="${esc(ui.eingabe || '')}" ${d}>${i.einheit && !i.einheitPruefen ? `<span class="unitl mono" style="align-self:center">${esc(i.einheit)}</span>` : ''}<button class="btn btn-primary" ${d}>Prüfen</button></form>`;
@@ -165,11 +166,12 @@ function vorleseTeile() {
   if (a.schritt.phase === 'beispiel') {
     const loes = i.typ === 'mc' ? 'Richtig ist: ' + i.optionen.find(o => o.richtig).text : '';
     return [karteTeil(a.lernziel.lernkarte), ...(a.lernziel.zusatzkarten || []).map(karteTeil),
-      { text: ['Vorgerechnet: ' + i.text, loes, i.erklaerung].filter(Boolean).join('. ') }];
+      ...(a.zeigeVorgerechnet ? [{ text: ['Vorgerechnet: ' + i.text, loes, i.erklaerung].filter(Boolean).join('. ') }] : [])];
   }
+  if (ui.ergebnis && !loesungSichtbar()) return [{ text: ['Nicht ganz.', ui.ergebnis.nochVersuch ? 'Versuch es nochmals.' : '', hinweiseHtml(a, ui.ergebnis)].join(' ').replace(/<[^>]+>/g, ' ') }];
   if (ui.ergebnis) {
     const e = ui.ergebnis;
-    return [{ text: (e.richtig ? 'Richtig. ' : (e.punkte > 0 ? 'Teilweise richtig. ' : 'Nicht ganz. ') + 'Richtig wäre: ' + e.loesung + '. ') + (e.erklaerung || '') }];
+    return [{ text: (e.richtig ? 'Richtig. ' : (e.punkte > 0 ? 'Teilweise richtig. ' : 'Nicht ganz. ') + 'Richtig wäre: ' + e.loesung + '. ') + (e.erklaerung || '') + (NOCHMALS[e.nochmals] ? ' ' + NOCHMALS[e.nochmals] : '') }];
   }
   const opts = i.typ === 'mc' ? i.optionen.map((o, k) => 'Antwort ' + 'ABCDEF'[k] + ': ' + o.text).join('. ') : '';
   const hinweis = { luecke: 'Fülle die Lücken aus.', zuordnen: 'Ordne richtig zu.', reihenfolge: 'Bringe in die richtige Reihenfolge.', zahl: 'Gib die Zahl ein.' }[i.typ] || '';
@@ -184,17 +186,43 @@ function beispielHtml(a) {
   const loes = i.typ === 'mc' ? `<p><b>Richtig:</b> ${i.optionen.find(o => o.richtig).text}</p>` : i.typ === 'zahl' ? '' : `<p><b>Lösung:</b> ${esc(i.musterantwort || '')}</p>`;
   return `<div class="row" style="margin:0 0 var(--space-2)"><div class="tag">Neu: ${esc(a.lernziel.titel)}</div>${vorleseKnopf()}</div>
     ${k && k.html ? `<div class="lbody">${k.html}</div>` : ''}${worked}${zusatz}
-    <div class="worked"><div class="wgiven"><b>Vorgerechnet:</b> ${i.text}</div>${loes}<div class="lbody">${i.erklaerung || ''}</div></div>
+    ${a.zeigeVorgerechnet ? `<div class="worked"><div class="wgiven"><b>Vorgerechnet:</b> ${i.text}</div>${loes}<div class="lbody">${i.erklaerung || ''}</div></div>` : ''}
     ${simHtml(a.lernziel, ui.simWahl)}
     <p class="small">Lies das Beispiel genau. Gleich kommt eine ähnliche Aufgabe.</p>
     <button class="btn btn-primary block" data-act="weiter">Verstanden, weiter</button>`;
 }
 
+// Schritt «mit Hilfe»: nur ein kurzer Tipp, nie die ganze Lernkarte (sonst wird abgeschrieben statt abgerufen).
+// Ohne eigenen Tipp (Feld «hilfe») ein allgemeiner Hinweis, der nichts verrät.
+const ALLG_HILFE = {
+  zahl: 'Welche Grössen sind gegeben, welche ist gesucht? Welche Formel verbindet sie? Denk an die Einheit.',
+  mc: 'Lies die Frage genau. Streiche zuerst die Antworten, die sicher nicht stimmen.'
+};
 function hilfeHtml(a) {
-  const i = a.instanz, k = a.lernziel.lernkarte;
-  const inhalt = i.hilfe ? `<b>Tipp:</b> ${i.hilfe}` : k && k.html ? k.html : '';
-  return inhalt ? `<div class="hilfe">${inhalt}</div>` : '';
+  const i = a.instanz;
+  if (i.hilfe) return `<div class="hilfe"><b>Tipp:</b> ${i.hilfe}</div>`;
+  const karte = (a.lernziel.lernkarte && a.lernziel.lernkarte.titel) || a.lernziel.titel;
+  return `<div class="hilfe"><b>Tipp:</b> Denk an die Lernkarte «${esc(karte)}». ${ALLG_HILFE[i.typ] || 'Geh Schritt für Schritt vor.'}</div>`;
 }
+// Hinweisleiter nach einem Fehler: 1 Denkanstoss (Formel/Regel der Lernkarte, nie die Erklärungen zu falschen Optionen),
+// 2 Hilfe (Feld «hilfe»), 3 Lösung mit Rückmeldung. Zahl: neuer Versuch nach Stufe 1 und 2. Andere Typen: Denkanstoss, dann Lösung.
+function denkanstossHtml(a) {
+  const k = a.lernziel.lernkarte;
+  const merk = ((k && k.html) || '').match(/<div class="merk">[\s\S]*?<\/div>\s*<\/div>/g);
+  const inhalt = merk ? merk.join('')
+    : `Welche Regel oder Formel aus «${esc(a.lernziel.titel)}» passt hier? ${a.instanz.typ === 'zahl' ? 'Schreib auf, was gegeben und was gesucht ist.' : 'Prüfe jede Antwort an dieser Regel.'}`;
+  return `<div class="hilfe"><b>Denkanstoss:</b> ${inhalt}</div>`;
+}
+function hinweiseHtml(a, r) {
+  const stufe = r.nochVersuch ? r.hilfsstufe : 1;
+  return denkanstossHtml(a) + (stufe >= 2 && !a.zeigeHilfe ? hilfeHtml(a) : '');
+}
+// Lösung erst nach der Leiter: bei Zahl nach dem letzten Versuch, sonst nach «Lösung zeigen». Selbsterklärung ohne Leiter.
+const loesungSichtbar = () => {
+  const r = ui.ergebnis;
+  return !!r && (r.richtig || (r.fertig && (ui.loesungGezeigt || ['zahl', 'erklaeren'].includes(sitzung.aktuell.instanz.typ))));
+};
+const NOCHMALS = { andereForm: 'Dieses Lernziel kommt bald nochmals, in anderer Form.', gleicheForm: 'Dieses Lernziel kommt bald nochmals.' };
 
 function rundeHtml() {
   const a = sitzung.aktuell;
@@ -208,17 +236,19 @@ function rundeHtml() {
   } else if (a.schritt.phase === 'beispiel') {
     inhalt = `<section class="card">${beispielHtml(a)}</section>`;
   } else {
-    const fertig = !!ui.ergebnis;
+    const fertig = !!ui.ergebnis && !ui.ergebnis.nochVersuch;
     const sicherheit = ui.frageSicherheit && !fertig
       ? `<div class="hilfe"><p><b>Wie sicher bist du?</b></p><div class="sicher"><button class="btn" data-act="sicher" data-v="sicher">sicher</button><button class="btn" data-act="sicher" data-v="unsicher">unsicher</button><button class="btn" data-act="sicher" data-v="geraten">geraten</button></div></div>` : '';
     const fb = ui.warnung ? `<div class="fb warn"><div class="fbb">${esc(ui.warnung)}</div></div>` : '';
-    const erg = fertig ? `<div class="fb ${ui.ergebnis.richtig ? 'good' : ui.ergebnis.punkte > 0 ? 'warn' : 'bad'}">
+    const leiter = ui.ergebnis && !loesungSichtbar() ? `<div class="fb warn"><div class="fbt">Nicht ganz.${ui.ergebnis.einheitFalsch ? ' Die Einheit passt nicht.' : ''}${ui.ergebnis.nochVersuch ? ' Versuch es nochmals.' : ''}</div></div>${hinweiseHtml(a, ui.ergebnis)}
+        ${ui.ergebnis.nochVersuch ? '' : '<button class="btn btn-primary block" data-act="loesung" id="weiterBtn">Lösung zeigen</button>'}` : '';
+    const erg = loesungSichtbar() ? `<div class="fb ${ui.ergebnis.richtig ? 'good' : ui.ergebnis.punkte > 0 ? 'warn' : 'bad'}">
         <div class="fbt">${ui.ergebnis.richtig ? 'Richtig.' : ui.ergebnis.punkte > 0 ? 'Teilweise richtig.' : 'Nicht ganz.'}${ui.ergebnis.xp ? ` <span class="mono">+${ui.ergebnis.xp} XP</span>` : ''}</div>
-        <div class="fbb">${ui.ergebnis.richtig ? '' : `Richtig wäre: <b>${ui.ergebnis.loesung}</b><br>`}${ui.ergebnis.erklaerung || ''}${!ui.ergebnis.richtig ? '<br><br>Dieses Lernziel kommt bald nochmals, in anderer Form.' : ''}</div></div>
+        <div class="fbb">${ui.ergebnis.richtig ? '' : `Richtig wäre: <b>${ui.ergebnis.loesung}</b><br>`}${ui.ergebnis.erklaerung || ''}${NOCHMALS[ui.ergebnis.nochmals] ? `<br><br>${NOCHMALS[ui.ergebnis.nochmals]}` : ''}</div></div>
         <button class="btn btn-primary block" data-act="weiter" id="weiterBtn">Weiter</button>` : '';
     const simZuerst = a.aufgabe.simulation ? simHtml({ simulationen: (a.lernziel.simulationen || []).filter(x => x.id === a.aufgabe.simulation) }) : '';
     inhalt = `<section class="card"><div class="row" style="margin:0 0 var(--space-2)"><p class="small" style="margin:0">${esc(a.lernziel.titel)}</p>${vorleseKnopf()}</div>${simZuerst}<div class="q">${a.instanz.text}</div>
-      ${a.zeigeHilfe ? hilfeHtml(a) : ''}${eingabeHtml(a, fertig || ui.frageSicherheit)}${sicherheit}${fb}${erg}</section>`;
+      ${a.zeigeHilfe ? hilfeHtml(a) : ''}${eingabeHtml(a, fertig || ui.frageSicherheit)}${sicherheit}${fb}${leiter}${erg}</section>`;
   }
   return `${kopf(sitzung.art === 'block' ? 'Wiederholungsblock' : 'Zusatzblock', '', `<button class="btn sm" data-act="ende">Beenden</button>`)}
     <main class="wrap"><div class="stack-v">${oben}${inhalt}</div></main>`;
@@ -268,7 +298,7 @@ function starteSimulation(laufend) {
 
 /* ---------- Ablauf ---------- */
 function starteSitzung(art) {
-  sitzung = new Sitzung(paket, daten.modell, { art, freigabe: daten.freigabe });
+  sitzung = new Sitzung(paket, daten.modell, { art, freigabe: daten.freigabe, appVersion: APP_VERSION });
   ui = { seite: 'runde' };
   naechste();
 }
@@ -291,7 +321,7 @@ function sammleEingabe() {
 // Antwort steht fest → evtl. zuerst Sicherheit abfragen → dann bewerten
 function antwortFest(antwort) {
   ui.antwort = antwort;
-  if (ui.sicherheitNoetig && !ui.sicherheit) {
+  if (ui.sicherheitNoetig && !ui.sicherheit && !ui.ergebnis) {
     // Probe, ob die Eingabe auswertbar ist, bevor die Sicherheit abgefragt wird
     if (sitzung.aktuell.instanz.typ === 'zahl' && !/\d/.test(String(antwort))) { ui.warnung = 'Gib eine Zahl ein, zum Beispiel 120 oder 2,5.'; return render(); }
     ui.frageSicherheit = true; ui.warnung = null; return render();
@@ -301,18 +331,20 @@ function antwortFest(antwort) {
 
 function werte() {
   const r = sitzung.antworte(ui.antwort, ui.sicherheit || null);
-  if (!r.gueltig) { ui.warnung = r.hinweis || 'Bitte gib eine Antwort ein.'; ui.frageSicherheit = false; ui.sicherheit = null; return render(); }
-  ui.ergebnis = r; ui.frageSicherheit = false; ui.warnung = null;
+  if (!r.gueltig) { ui.warnung = r.hinweis || 'Bitte gib eine Antwort ein.'; ui.frageSicherheit = false; if (!ui.ergebnis) ui.sicherheit = null; return render(); }
+  ui.ergebnis = r; ui.frageSicherheit = false; ui.warnung = null; ui.loesungGezeigt = false;
   daten.modell = sitzung.modell;
-  daten.ausstehend.antworten.push(sitzung.protokoll[sitzung.protokoll.length - 1]);
+  // Protokolleintrag erst senden, wenn die Aufgabe abgeschlossen ist (dann stehen Versuch und Hilfsstufe fest)
+  if (r.fertig) daten.ausstehend.antworten.push(sitzung.aktuell.protokoll);
   daten.xp += r.xp;
-  ui.pauseFolgt = r.pauseHinweis;
+  ui.pauseFolgt = ui.pauseFolgt || r.pauseHinweis;
   speichern();
   if (daten.ausstehend.antworten.length >= SYNC_ALLE) sync();
   render();
 }
 
 async function beende() {
+  if (ui.ergebnis && ui.ergebnis.nochVersuch) daten.ausstehend.antworten.push(sitzung.aktuell.protokoll); // mitten in der Leiter abgebrochen
   const z = sitzung.abschliessen();
   daten.xp += z.blockXp;
   if (z.abrufe) daten.serie = aktualisiereSerie(daten.serie, new Date());
@@ -359,9 +391,10 @@ $app.addEventListener('click', e => {
     const k = +b.dataset.k, j = act === 'hoch' ? k - 1 : k + 1, f = ui.eingabe.slice();
     [f[k], f[j]] = [f[j], f[k]]; ui.eingabe = f; render();
   }
+  else if (act === 'loesung') { ui.loesungGezeigt = true; render(); }
   else if (act === 'sicher') { ui.sicherheit = b.dataset.v; werte(); }
   else if (act === 'weiter') {
-    if (sitzung.aktuell.schritt.phase === 'beispiel') { sitzung.weiter(); return naechste(); }
+    if (sitzung.aktuell.schritt.phase === 'beispiel') { daten.ausstehend.antworten.push(sitzung.weiter()); speichern(); return naechste(); }
     if (ui.pauseFolgt) { ui.pause = true; ui.pauseFolgt = false; return render(); }
     naechste();
   }
@@ -386,11 +419,11 @@ $app.addEventListener('submit', e => {
   stoppeVorlesen();
   e.preventDefault();
   if (!K.konto) { if (e.target.dataset.form === 'neu') registrierenKlick(); else if (e.target.dataset.form === 'profil') document.querySelector('[data-act="profilNeu"]').click(); else anmeldenKlick(); return; }
-  if (ui.ergebnis || ui.frageSicherheit) return;
+  if ((ui.ergebnis && !ui.ergebnis.nochVersuch) || ui.frageSicherheit) return;
   ui.eingabe = sammleEingabe(); antwortFest(ui.eingabe);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && ui.seite === 'runde' && ui.ergebnis && document.activeElement?.id !== 'weiterBtn') { e.preventDefault(); document.getElementById('weiterBtn')?.click(); }
+  if (e.key === 'Enter' && ui.seite === 'runde' && ui.ergebnis && !ui.ergebnis.nochVersuch && document.activeElement?.id !== 'weiterBtn') { e.preventDefault(); document.getElementById('weiterBtn')?.click(); }
 });
 
 async function oeffne() {
@@ -405,6 +438,7 @@ async function oeffne() {
 }
 
 async function ladeWertung() {
+  if (!E.schalter.klassenwertung) { wertung = null; return; } // ausgeschaltet: gar nicht erst beim Server abfragen
   try { wertung = await K.klassenwertung(); } catch (e) { wertung = null; }
   if (K.konto && !ui.seite) render();
 }
