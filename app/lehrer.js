@@ -118,12 +118,14 @@ function pruefenHtml() {
   const p = ui.pruefPaket;
   let liste = '<p>Lädt …</p>';
   if (p) {
-    const alle = p.entwuerfe, offen = alle.filter(e => e.status === 'entwurf');
+    const alle = p.entwuerfe, offen = alle.filter(e => e.status === 'entwurf'), frei = alle.filter(e => e.status === 'geprueft');
     const zeigen = ui.alleZeigen ? alle : offen;
     const lz = id => (p.lernziele.find(l => l.id === id) || {}).titel || id;
     liste = `<p>${offen.length} von ${alle.length} Einträgen sind noch Entwürfe.</p>
       <div class="btnrow"><button class="btn sm" data-act="alleZeigen">${ui.alleZeigen ? 'Nur Entwürfe zeigen' : 'Alle zeigen'}</button>
-      ${offen.length ? (ui.alleBestaetigen ? `<button class="btn sm btn-primary" data-act="alleFreigebenJa">Wirklich alle ${offen.length} freigeben</button><button class="btn sm" data-act="alleFreigebenNein">Abbrechen</button>` : `<button class="btn sm" data-act="alleFreigeben">Alle Entwürfe dieses Themas freigeben …</button>`) : ''}</div>
+      ${offen.length ? (ui.alleBestaetigen ? `<button class="btn sm btn-primary" data-act="alleFreigebenJa">Wirklich alle ${offen.length} freigeben</button><button class="btn sm" data-act="alleFreigebenNein">Abbrechen</button>` : `<button class="btn sm" data-act="alleFreigeben">Alle Entwürfe dieses Themas freigeben …</button>`) : ''}
+      ${frei.length ? (ui.alleZurueckBestaetigen ? `<button class="btn sm btn-primary" data-act="alleZurueckJa">Wirklich alle ${frei.length} zurückziehen</button><button class="btn sm" data-act="alleZurueckNein">Abbrechen</button>` : `<button class="btn sm" data-act="alleZurueck">Alle Freigaben dieses Themas zurückziehen …</button>`) : ''}</div>
+      ${ui.alleZurueckBestaetigen ? `<p class="small">Zurückgezogene Inhalte sehen die Kinder nicht mehr. Die Antworten, die es schon gibt, bleiben erhalten. Sie können jeden Eintrag später wieder freigeben.</p>` : ''}
       ${zeigen.map(e => `<section class="card" style="margin-top:var(--space-3)"><div class="row"><span class="tag">${e.art === 'erklaerungen' ? 'Erklärungen zu falschen Antworten' : 'Neue Aufgabe'} · ${esc(lz(e.aufgabe.lernziel))}</span><span class="chip ${e.status === 'geprueft' ? 'sitzt' : e.status === 'entwurf' ? 'wackelt' : 'neu'}">${STATUS_TEXT[e.status]}</span></div>
         ${beispielHtml(e)}
         <div class="btnrow" style="margin-top:var(--space-3)">
@@ -138,7 +140,7 @@ function pruefenHtml() {
     <label class="einst" style="display:flex">Thema <select data-act="pruefPaket">${pakete}</select></label></section>${liste}`;
 }
 async function ladePruefen() {
-  ui.pruefPaket = null; render();
+  ui.pruefPaket = null; ui.alleBestaetigen = false; ui.alleZurueckBestaetigen = false; render(); // offene Rückfragen gelten nicht für ein anderes Thema
   try {
     const eintrag = KATALOG.find(p => p.id === ui.paketId);
     const roh = (await import('../pakete/' + eintrag.datei.replace('./', ''))).default;
@@ -213,6 +215,9 @@ $app.addEventListener('click', async e => {
   else if (a === 'alleFreigeben') { ui.alleBestaetigen = true; render(); }
   else if (a === 'alleFreigebenNein') { ui.alleBestaetigen = false; render(); }
   else if (a === 'alleFreigebenJa') { ui.alleBestaetigen = false; setzeFreigabe(ui.pruefPaket.entwuerfe.filter(x => x.status === 'entwurf').map(x => x.id), 'geprueft'); }
+  else if (a === 'alleZurueck') { ui.alleZurueckBestaetigen = true; render(); }
+  else if (a === 'alleZurueckNein') { ui.alleZurueckBestaetigen = false; render(); }
+  else if (a === 'alleZurueckJa') { ui.alleZurueckBestaetigen = false; setzeFreigabe(ui.pruefPaket.entwuerfe.filter(x => x.status === 'geprueft').map(x => x.id), 'zurueckgezogen'); }
   else if (a === 'freigabe') setzeFreigabe([b.dataset.id], b.dataset.s);
   else if (a === 'neuRendern') render();
   else if (a === 'oeffnen') { ui.klasse = b.dataset.id; ui.loeschen = false; ladeAuswertung(); }
