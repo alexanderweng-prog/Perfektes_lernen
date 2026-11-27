@@ -4,9 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EINSTELLUNGEN as E, EINSTELLUNGEN_VERSION } from '../motor/einstellungen.js';
 import { bewerte, leseZahl } from '../motor/bewerten.js';
-import { instanz, pruefePaket } from '../motor/format.js';
+import { instanz, pruefePaket, hoheStufe } from '../motor/format.js';
 import { leeresModell, verbuche, status, istFaellig, passeNiveauAn, bewertungFuer, Rating } from '../motor/schuelermodell.js';
-import { Sitzung, pauseNoetig, verzahne, zaehleFaellige, kontrolleStichtag } from '../motor/sitzung.js';
+import { Sitzung, pauseNoetig, verzahne, zaehleFaellige, kontrolleStichtag, vertiefungFrei } from '../motor/sitzung.js';
 import { aktualisiereSerie, leereSerie, zieheBonus } from '../motor/belohnung.js';
 import { KATALOG } from '../pakete/katalog.js';
 import { ergaenze, ladeErgaenzung } from '../pakete/ergaenze.js';
@@ -284,6 +284,187 @@ test('Kontrollfragen: Auswahl beim ersten Abruf ohne Hilfe', () => {
 test('Schalter: Klassenwertung standardmässig aus, Bonus und Serie an', () => {
   assert.deepEqual(E.schalter, { serie: true, klassenwertung: false, bonus: true });
   assert.ok(zieheBonus({ abrufe: 3 }, () => 0), 'Bonus an: kann gezogen werden');
+});
+
+/* ---------- Höhere Taxonomiestufen ---------- */
+// Richtige Antwort für jede Instanz (auch die neuen Typen)
+function richtigeAntwort(i) {
+  const nr = liste => liste.findIndex(x => x.richtig);
+  return {
+    mc: () => richtigeNr(i), zahl: () => String(i.wert), luecke: () => i.luecken.map(l => l[0]), zuordnen: () => i.paare.map(x => x[1]),
+    reihenfolge: () => i.elemente, erklaeren: () => 'passt',
+    fehler: () => ({ zeile: i.fehlerZeile, art: i.fehlerArt }), daten: () => i.aussagen.map(x => x.richtig),
+    vergleich: () => ({ wahl: i.besser, begruendung: nr(i.begruendungen) }),
+    versuch: () => ({ frage: i.fragen ? nr(i.fragen) : undefined, rollen: i.groessen.map(g => [].concat(g.rolle)[0]) }),
+    vorhersage: () => ({ vorhersage: nr(i.optionen), beobachtung: nr(i.optionen) })
+  }[i.typ]();
+}
+const DEMO = (await import('../pakete/demo-formate.js')).default;
+const demoAufgabe = id => instanz(DEMO.aufgaben.find(a => a.id === id));
+
+test('Stufen: Demo-Paket mit allen neuen Typen ist gültig, Fehler im Format werden erkannt', () => {
+  assert.deepEqual(pruefePaket(DEMO), []);
+  const typen = new Set(DEMO.aufgaben.filter(hoheStufe).map(a => a.typ));
+  assert.deepEqual([...typen].sort(), ['daten', 'fehler', 'vergleich', 'versuch', 'vorhersage']);
+  const kaputt = aenderung => pruefePaket({ ...DEMO, aufgaben: DEMO.aufgaben.map(a => (a.id === aenderung.id ? { ...a, ...aenderung } : a)) });
+  assert.match(kaputt({ id: 'demo.h1', stufe: 7 }).join(), /Stufe muss 1–6/);
+  assert.match(kaputt({ id: 'demo.h1', stufe_begruendung: undefined }).join(), /stufe_begruendung/);
+  assert.match(kaputt({ id: 'demo.h1', fehlerZeile: 9 }).join(), /fehlerZeile/);
+  assert.match(kaputt({ id: 'demo.h2', aussagen: DEMO.aufgaben.find(a => a.id === 'demo.h2').aussagen.map(x => ({ ...x, richtig: true })) }).join(), /1 oder 2 Aussagen/);
+  assert.match(kaputt({ id: 'demo.h4', groessen: [{ text: 'a', rolle: 'veraendern' }, { text: 'b', rolle: 'konstant' }, { text: 'c', rolle: 'egal' }] }).join(), /messen/);
+  assert.match(kaputt({ id: 'demo.h5', simulation: undefined }).join(), /Simulation/);
+  // Bestehende Aufgaben ohne Feld «stufe» bleiben Grundstufe
+  assert.ok(DEMO.aufgaben.filter(a => a.stufe === undefined).every(a => !hoheStufe(a)));
+});
+
+test('Stufen: Auswertung mit Teilpunkten und Rückmeldung pro Fehler, ohne die Lösung zu verraten', () => {
+  const verraten = (r, ...loesungsteile) => r.hinweise.some(h => loesungsteile.some(t => h.includes(t)));
+  // Fehler finden
+  const f = demoAufgabe('demo.h1');
+  assert.equal(bewerte(f, { zeile: 2, art: 1 }).punkte, 1);
+  const f1 = bewerte(f, { zeile: 2, art: 0 });
+  assert.deepEqual([f1.punkte, f1.hinweise.length], [0.5, 1]);
+  const f2 = bewerte(f, { zeile: 0, art: 1 });
+  assert.deepEqual([f2.punkte, f2.hinweise.length], [0, 1], 'Fehlerart zählt nur bei richtiger Zeile');
+  assert.ok(!verraten(f2, 'Zeile 3', f.zeilen[2], 'Rechenart'));
+  assert.equal(bewerte(f, { zeile: 2 }).gueltig, false);
+  // Datenanalyse
+  const d = demoAufgabe('demo.h2');
+  assert.equal(bewerte(d, [false, true, true, false]).richtig, true);
+  const d1 = bewerte(d, [true, true, false, false]);
+  assert.deepEqual([d1.punkte, d1.hinweise.length], [0.5, 2]);
+  assert.ok(!verraten(d1, ...d.aussagen.map(x => x.text)));
+  // Vergleichen und begründen
+  const v = demoAufgabe('demo.h3');
+  assert.equal(bewerte(v, { wahl: 0, begruendung: 0 }).punkte, 1);
+  const v1 = bewerte(v, { wahl: 0, begruendung: 1 });
+  assert.equal(v1.punkte, 0.5);
+  assert.match(v1.erklaerung, /Mehr messen allein/, 'Erklärung zur gewählten Begründung kommt mit der Lösung');
+  assert.equal(bewerte(v, { wahl: 1, begruendung: 0 }).punkte, 0, 'Begründung zählt nur bei richtiger Wahl');
+  // Versuch planen: Struktur
+  const p = demoAufgabe('demo.h4');
+  const gut = ['veraendern', 'messen', 'konstant', 'konstant', 'egal'];
+  assert.equal(bewerte(p, { frage: 0, rollen: gut }).richtig, true);
+  assert.equal(bewerte(p, { frage: 0, rollen: ['veraendern', 'messen', 'konstant', 'konstant', 'konstant'] }).richtig, true, 'Unwichtiges konstant halten ist kein Fehler');
+  const p1 = bewerte(p, { frage: 0, rollen: ['veraendern', 'messen', 'veraendern', 'konstant', 'egal'] });
+  assert.ok(p1.punkte < 1 && p1.hinweise.some(h => /mehr als eine Grösse/.test(h)), 'zwei veränderte Grössen werden erkannt');
+  const p2 = bewerte(p, { frage: 1, rollen: ['veraendern', 'messen', 'egal', 'konstant', 'egal'] });
+  assert.equal(p2.hinweise.length, 2, 'falsche Frage und fehlende Kontrollgrösse');
+  assert.ok(!verraten(p2, ...p.groessen.map(g => g.text)));
+  assert.equal(bewerte(p, { frage: 0, rollen: ['veraendern', '', 'konstant', 'konstant', 'egal'] }).gueltig, false);
+  // Vorhersage
+  const h = demoAufgabe('demo.h5');
+  assert.equal(bewerte(h, { vorhersage: 1, beobachtung: 1 }).punkte, 1);
+  assert.equal(bewerte(h, { vorhersage: 0, beobachtung: 1 }).punkte, 0.5);
+  assert.match(bewerte(h, { vorhersage: 0, beobachtung: 1 }).erklaerung, /unterscheiden sich/);
+});
+
+// Testpaket mit je einer Vertiefungsaufgabe (Stufe 4) pro Lernziel, bei A1 zusätzlich eine mit Simulation
+function stufenPaket() {
+  const p = testpaket();
+  for (const l of p.lernziele) p.aufgaben.push({ ...p.aufgaben.find(a => a.lernziel === l.id), id: l.id + 'h', variantengruppe: l.id + 'h',
+    stufe: 4, stufe_begruendung: 'Test', schwierigkeit: 3 });
+  p.aufgaben.push({ ...p.aufgaben.find(a => a.id === 'A1h'), id: 'A1s', variantengruppe: 'A1s', simulation: 'sim' });
+  p.simulationen = { sim() {} };
+  return p;
+}
+// Modell, in dem alle Lernziele gelernt (Stabilität 30 Tage) und erst in 60 Tagen fällig sind
+function gelerntesModell(p, stabilitaet = 30) {
+  let m = leeresModell('test');
+  for (const l of p.lernziele) m = verbuche(m, l.id, { punkte: 1 }, t0);
+  for (const l of p.lernziele) m.lernziele[l.id].karte = { ...m.lernziele[l.id].karte, stability: stabilitaet, due: new Date(+t0 + 60 * TAG).toISOString() };
+  return m;
+}
+
+test('Stufen: Grundphasen und Beispiel verwenden nie eine Aufgabe ab Stufe 4', () => {
+  for (const z of [0, 0.3, 0.7, 0.99]) {
+    const s = new Sitzung(stufenPaket(), leeresModell('test'), { uhr: () => t0, zufall: () => z });
+    let a;
+    while ((a = s.naechster())) {
+      assert.ok(!hoheStufe(a.aufgabe), `${a.schritt.phase} brachte ${a.aufgabe.id}`);
+      if (a.schritt.phase === 'beispiel') s.weiter(); else s.antworte(falscheNr(a.instanz));
+    }
+    assert.ok(!s.offen.some(x => x.phase === 'vertiefung'));
+  }
+});
+
+test('Stufen: Vertiefung erst nach dem Lernen, ohne Einfluss auf FSRS, im Protokoll mit Stufe', () => {
+  const p = stufenPaket();
+  assert.equal(vertiefungFrei(gelerntesModell(p, 3), 'A1'), false, 'Stabilität unter der Schwelle');
+  assert.equal(new Sitzung(p, gelerntesModell(p, 3), { uhr: () => t0 }).offen.filter(x => x.phase === 'vertiefung').length, 0);
+  const m = gelerntesModell(p);
+  const s = new Sitzung(p, m, { uhr: () => new Date(+t0 + TAG), zufall: () => 0.5 });
+  const plan = s.offen.filter(x => x.phase === 'vertiefung');
+  assert.equal(plan.length, E.hoehereStufen.maxProBlock);
+  const a = s.naechster();
+  assert.equal(a.schritt.phase, 'vertiefung');
+  assert.ok(hoheStufe(a.aufgabe) && !a.aufgabe.simulation, 'im Block nur ohne Simulation');
+  const vorher = s.modell.lernziele[a.schritt.lernziel];
+  const r = s.antworte(falscheNr(a.instanz));
+  const nachher = s.modell.lernziele[a.schritt.lernziel];
+  assert.deepEqual([nachher.karte, nachher.richtig, nachher.falsch], [vorher.karte, vorher.richtig, vorher.falsch], 'FSRS und Zähler unverändert');
+  assert.ok(nachher.vertieft);
+  assert.deepEqual([r.nochmals, s.ergebnisse.length], [null, 0], 'kein «nochmals», zählt nicht für den Pausenhinweis');
+  assert.deepEqual([s.protokoll[0].phase, s.protokoll[0].stufe, s.protokoll[0].typ], ['vertiefung', 4, 'mc']);
+  // Beim nächsten Mal kommt ein anderes Lernziel zuerst (am längsten nicht vertieft)
+  const s2 = new Sitzung(p, s.modell, { uhr: () => new Date(+t0 + 2 * TAG), zufall: () => 0.5 });
+  assert.notEqual(s2.offen.find(x => x.phase === 'vertiefung').lernziel, a.schritt.lernziel);
+  // Zusatzblock: mehr Vertiefung, auch mit Simulation
+  const z = new Sitzung(p, m, { art: 'zusatz', uhr: () => new Date(+t0 + TAG), zufall: () => 0 });
+  assert.equal(z.offen.filter(x => x.phase === 'vertiefung').length, E.hoehereStufen.zusatzMax);
+});
+
+test('Stufen: Vertiefungsaufgaben kommen der Reihe nach, nicht nur die zum Niveau passende', () => {
+  const p = { ...DEMO, aufgaben: DEMO.aufgaben.filter(a => !hoheStufe(a) || a.lernziel !== 'demo.leistung' || !a.simulation) };
+  let m = gelerntesModell(p);
+  const gesehen = [];
+  for (let k = 1; k <= 4; k++) {
+    const s = new Sitzung(p, m, { uhr: () => new Date(+t0 + k * TAG), zufall: () => 0.5 });
+    let a;
+    while ((a = s.naechster())) {
+      if (a.schritt.phase === 'vertiefung') gesehen.push(a.aufgabe.id);
+      if (a.schritt.phase === 'beispiel') s.weiter(); else assert.ok(s.antworte(richtigeAntwort(a.instanz)).richtig, a.aufgabe.id);
+    }
+    m = s.modell;
+  }
+  assert.deepEqual([...gesehen].sort(), ['demo.h1', 'demo.h2', 'demo.h3', 'demo.h4'], gesehen.join());
+});
+
+test('Stufen: zweiter Versuch nach Rückmeldung pro Fehler', () => {
+  const p = { ...DEMO, aufgaben: DEMO.aufgaben.filter(a => !hoheStufe(a) || a.id === 'demo.h1') };
+  const m = gelerntesModell(p);
+  const s = new Sitzung(p, m, { uhr: () => new Date(+t0 + TAG), zufall: () => 0.5 });
+  const a = s.naechster();
+  assert.equal(a.aufgabe.id, 'demo.h1');
+  const r1 = s.antworte({ zeile: 0, art: 1 });
+  assert.deepEqual([r1.nochVersuch, r1.hinweise.length], [true, 1]);
+  const r2 = s.antworte({ zeile: 2, art: 1 });
+  assert.deepEqual([r2.richtig, r2.fertig, s.protokoll[0].versuch, s.protokoll[0].richtig], [true, true, 2, false]);
+});
+
+test('Pilot Leistung: höchstens 9 Entwürfe auf Stufe 4–6 mit Begründung, lösbar, Lösung nicht im Aufgabentext', async () => {
+  const roh = (await import('../pakete/leistung.js')).default;
+  const erg = await ladeErgaenzung('leistung');
+  const pilot = ergaenze(roh, erg).aufgaben.filter(hoheStufe);
+  assert.ok(pilot.length >= 7 && pilot.length <= 9, pilot.length + ' Aufgaben');
+  assert.ok(pilot.every(a => a.pruefstatus === 'entwurf'), 'ohne Freigabe alles Entwurf');
+  assert.equal(new Set(pilot.map(a => a.lernziel)).size, 3, 'drei Lernziele');
+  for (const lz of new Set(pilot.map(a => a.lernziel))) {
+    const stufen = pilot.filter(a => a.lernziel === lz).map(a => a.stufe);
+    assert.ok(stufen.includes(4) && stufen.includes(5), lz + ': Stufe 4 und 5');
+  }
+  assert.ok(pilot.some(a => a.typ === 'versuch' && a.stufe === 6), 'eine Versuchsplanung auf Stufe 6');
+  const frei = ergaenze(roh, erg, { alleFreigeben: true });
+  for (const a of frei.aufgaben.filter(hoheStufe)) {
+    const i = instanz(a);
+    assert.ok(a.stufe_begruendung && a.stufe_begruendung.length > 30, a.id + ': Begründung der Stufe');
+    assert.equal(bewerte(i, richtigeAntwort(i)).punkte, 1, a.id + ': richtige Antwort gibt volle Punkte');
+    const verraten = { fehler: () => [i.fehlerarten[i.fehlerArt]], vergleich: () => i.begruendungen.filter(b => b.richtig).map(b => b.text),
+      daten: () => i.aussagen.map(x => x.text), versuch: () => [] }[i.typ]();
+    assert.ok(!verraten.some(t => i.text.includes(t)), a.id + ': Lösung steht im Aufgabentext');
+  }
+  // Vertiefung ersetzt nie die Grundaufgaben: jedes Pilot-Lernziel hat weiterhin geprüfte Grundaufgaben
+  for (const lz of new Set(pilot.map(a => a.lernziel))) assert.ok(frei.aufgaben.some(a => a.lernziel === lz && !hoheStufe(a) && a.pruefstatus === 'geprueft'));
 });
 
 function grossesPaket() {

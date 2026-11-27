@@ -5,15 +5,16 @@
 // - Falsch gelöst: gleiches Lernziel kommt später in der Sitzung nochmals, möglichst in anderer Variante.
 // - Pausenhinweis, wenn die Fehlerquote deutlich über dem eigenen Schnitt der Sitzung liegt.
 // - Kontrollfragen (Pilot-Messung): wenige Lernziele zusätzlich nach festem Abstand, ohne Einfluss auf den Planer.
+// - Vertiefung: Aufgaben ab Taxonomiestufe 4, erst wenn das Lernziel gelernt ist; ohne Einfluss auf den Planer.
 
 import { EINSTELLUNGEN as E, EINSTELLUNGEN_VERSION } from './einstellungen.js';
-import { instanz, mischen } from './format.js';
+import { instanz, mischen, hoheStufe } from './format.js';
 import { bewerte } from './bewerten.js';
 import { istNeu, istFaellig, abrufWahrscheinlichkeit, verbuche, eintrag } from './schuelermodell.js';
 
 export function freigegebeneLernziele(paket, freigabe) {
   const ok = freigabe && freigabe.length ? new Set(freigabe) : null;
-  const mitAufgabe = new Set(paket.aufgaben.filter(a => a.pruefstatus === 'geprueft').map(a => a.lernziel));
+  const mitAufgabe = new Set(paket.aufgaben.filter(a => a.pruefstatus === 'geprueft' && !hoheStufe(a)).map(a => a.lernziel));
   return paket.lernziele.filter(l => (!ok || ok.has(l.kompetenz)) && mitAufgabe.has(l.id));
 }
 
@@ -31,17 +32,25 @@ export function zaehleFaellige(paket, modell, { jetzt = new Date(), freigabe } =
 }
 
 // Geprüfte Aufgaben eines Lernziels, die in einer Phase in Frage kommen.
-// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb.
-function kandidatenFuer(paket, lernzielId, simulation) {
-  const geprueft = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft');
+// Grundstufe: Aufgaben mit Simulation nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb.
+// hoch (Vertiefung, Stufe 4–6): simulation = false nur ohne, null mit und ohne Simulation.
+function kandidatenFuer(paket, lernzielId, simulation, hoch = false) {
+  const geprueft = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft' && hoheStufe(a) === hoch);
+  if (hoch) return simulation === null ? geprueft : geprueft.filter(a => !!a.simulation === simulation);
   const passend = geprueft.filter(a => !!a.simulation === simulation);
   return passend.length ? passend : geprueft;
 }
 const gruppenZahl = (paket, lernzielId) => new Set(kandidatenFuer(paket, lernzielId, false).map(a => a.variantengruppe)).size;
 
+// Höhere Stufen sind freigeschaltet, sobald das Lernziel als gelernt gilt (FSRS-Stabilität über der Schwelle)
+export function vertiefungFrei(modell, lernzielId) {
+  const e = eintrag(modell, lernzielId);
+  return !!(e && e.karte && e.karte.stability >= E.hoehereStufen.abStabilitaetTage);
+}
+
 // ohneGruppen: möglichst meiden (Rückfall erlaubt). gesperrt: nie (z. B. die vorgerechnete Aufgabe aus dem Beispiel).
-export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], gesperrt = [], zufall = Math.random, simulation = false } = {}) {
-  const alle = kandidatenFuer(paket, lernzielId, simulation).filter(a => !gesperrt.includes(a.variantengruppe));
+export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], gesperrt = [], zufall = Math.random, simulation = false, hoch = false } = {}) {
+  const alle = kandidatenFuer(paket, lernzielId, simulation, hoch).filter(a => !gesperrt.includes(a.variantengruppe));
   if (!alle.length) return undefined;
   const andere = alle.filter(a => !ohneGruppen.includes(a.variantengruppe));
   const pool = andere.length ? andere : alle;
@@ -69,7 +78,7 @@ export class Sitzung {
     this.vorgerechnet = new Map();     // Lernziel → im Beispiel vorgerechnete Variantengruppe
     this.offen = this.plane(freigabe);
     // geschätzte Zahl Aufgaben: fällige + pro neuem Lernziel zwei (mit Hilfe, ohne Hilfe)
-    this.geplant = this.offen.filter(s => s.phase === 'faellig' || s.phase === 'kontrolle').length + 2 * this.offen.filter(s => s.phase === 'beispiel').length;
+    this.geplant = this.offen.filter(s => ['faellig', 'kontrolle', 'vertiefung'].includes(s.phase)).length + 2 * this.offen.filter(s => s.phase === 'beispiel').length;
   }
 
   plane(freigabe) {
@@ -97,12 +106,22 @@ export class Sitzung {
     });
     if (this.art === 'zusatz') {
       // Simulationen mit Frage: bevorzugt Lernziele, die das Kind schon kennt, sonst die neuen dieser Runde
-      const mitSim = new Set(this.paket.aufgaben.filter(a => a.simulation && a.pruefstatus === 'geprueft').map(a => a.lernziel));
+      const mitSim = new Set(this.paket.aufgaben.filter(a => a.simulation && a.pruefstatus === 'geprueft' && !hoheStufe(a)).map(a => a.lernziel));
       const kandidaten = lz.filter(l => mitSim.has(l.id));
       const bekannt = kandidaten.filter(l => !istNeu(this.modell, l.id));
       const auswahl = [...mischen(bekannt, this.zufall), ...kandidaten.filter(l => neu.includes(l))].slice(0, E.zusatzMaxSimulationen);
       auswahl.forEach((l, k) => offen.push({ lernziel: l.id, phase: 'simulation', bereitAb: neu.includes(l) ? 99 : 1 + k * 2 }));
     }
+    // Vertiefung (Stufe 4–6): nur gelernte Lernziele, die in dieser Sitzung nicht schon abgefragt werden.
+    // Am längsten nicht vertiefte zuerst. Im Block nur ohne Simulation und nur, wenn noch Platz ist.
+    const sim = this.art === 'zusatz' ? null : false;
+    const max = this.art === 'zusatz' ? E.hoehereStufen.zusatzMax
+      : Math.max(0, Math.min(E.hoehereStufen.maxProBlock, E.blockMaxAufgaben - offen.filter(x => x.phase !== 'beispiel').length - 2 * neu.length));
+    const zuletzt = l => (eintrag(this.modell, l.id) || {}).vertieft || '';
+    lz.filter(l => vertiefungFrei(this.modell, l.id) && !offen.some(x => x.lernziel === l.id) && kandidatenFuer(this.paket, l.id, sim, true).length)
+      .sort((a, b) => zuletzt(a).localeCompare(zuletzt(b)))
+      .slice(0, max)
+      .forEach((l, k) => offen.push({ lernziel: l.id, phase: 'vertiefung', bereitAb: offen.length + k }));
     return offen;
   }
 
@@ -121,7 +140,7 @@ export class Sitzung {
     // Vorrang: andere Kompetenz als zuletzt (Interleaving), darin Fading-/Nochmals-Schritte vor fälligen
     const letzte = this.aktuell && this.aktuell.schritt;
     const istAnders = s => !letzte || (s.lernziel !== letzte.lernziel && this.kompetenzVon.get(s.lernziel) !== this.kompetenzVon.get(letzte.lernziel));
-    const zeitkritisch = s => s.phase !== 'faellig' && s.phase !== 'kontrolle';
+    const zeitkritisch = s => !['faellig', 'kontrolle', 'vertiefung'].includes(s.phase);
     const nachBereit = (a, b) => a.bereitAb - b.bereitAb;
     const schritt = [
       kandidaten.filter(s => istAnders(s) && zeitkritisch(s)).sort(nachBereit),
@@ -133,11 +152,18 @@ export class Sitzung {
 
     const benutzt = this.gruppenInSitzung.get(schritt.lernziel) || [];
     const e = eintrag(this.modell, schritt.lernziel);
-    const ohneGruppen = [...benutzt, ...(e && e.letzteGruppe ? [e.letzteGruppe] : [])];
+    const hoch = schritt.phase === 'vertiefung';
+    let ohneGruppen = [...benutzt, ...(e && e.letzteGruppe ? [e.letzteGruppe] : [])];
+    if (hoch) {
+      // Vertiefung der Reihe nach: die zuletzt gestellten meiden, sodass die am längsten nicht gestellte drankommt
+      const n = new Set(kandidatenFuer(this.paket, schritt.lernziel, null, true).map(x => x.variantengruppe)).size;
+      ohneGruppen = n > 1 ? ((e && e.vertieftGruppen) || []).slice(-(n - 1)) : [];
+    }
     // «ohne Hilfe» und «nochmals» dürfen die im Beispiel vorgerechnete Aufgabe nie bringen
     const vorgerechnet = this.vorgerechnet.get(schritt.lernziel);
-    const gesperrt = vorgerechnet && (schritt.phase === 'neu' || schritt.phase === 'nochmals') ? [vorgerechnet] : [];
-    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, gesperrt, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
+    const gesperrt = vorgerechnet && ['neu', 'nochmals', 'vertiefung'].includes(schritt.phase) ? [vorgerechnet] : [];
+    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, gesperrt, zufall: this.zufall,
+      simulation: hoch ? (this.art === 'zusatz' ? null : false) : schritt.phase === 'simulation', hoch });
     this.gruppenInSitzung.set(schritt.lernziel, [...benutzt, aufgabe.variantengruppe]);
     // Hat das Lernziel nur eine Variantengruppe, wird im Beispiel nichts vorgerechnet (sonst käme die Lösung später wieder)
     const zeigeVorgerechnet = schritt.phase === 'beispiel' && gruppenZahl(this.paket, schritt.lernziel) > 1;
@@ -186,10 +212,15 @@ export class Sitzung {
       // vorhergesagte Abrufwahrscheinlichkeit (FSRS) vor dieser Antwort; null, solange es noch keine Planer-Karte gibt
       const pVorher = istNeu(this.modell, s.lernziel) ? null : Math.round(abrufWahrscheinlichkeit(this.modell, s.lernziel, jetzt) * 1e4) / 1e4;
       const kontrolle = s.phase === 'kontrolle' ? eintrag(this.modell, s.lernziel).kontrolle : null;
-      // Kontrollfragen ändern das Modell nicht (weder Planer noch Niveau noch Zähler)
-      if (!kontrolle) this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
+      // Kontrollfragen und Vertiefung ändern das Modell nicht (weder Planer noch Niveau noch Zähler):
+      // FSRS plant das Behalten des Lernziels; eine schwierige Analyseaufgabe sagt darüber wenig aus.
+      if (!kontrolle && s.phase !== 'vertiefung') this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
       const e = { ...this.modell.lernziele[s.lernziel], letzteGruppe: a.aufgabe.variantengruppe };
       if (kontrolle) e.kontrolle = { ...kontrolle, offen: kontrolle.offen.filter(t => t > s.stichtag) };
+      if (s.phase === 'vertiefung') { // für die Reihenfolge beim nächsten Mal
+        e.vertieft = jetzt.toISOString();
+        e.vertieftGruppen = [...(e.vertieftGruppen || []).filter(g => g !== a.aufgabe.variantengruppe), a.aufgabe.variantengruppe].slice(-20);
+      }
       // Erster Abruf ohne Hilfe: per Zufall für die Kontrollfragen auswählen
       if (s.phase === 'neu' && !e.kontrolle && E.kontrolle.anteil > 0 && this.zufall() < E.kontrolle.anteil) {
         e.kontrolle = { ab: jetzt.toISOString(), offen: [...E.kontrolle.tage] };
@@ -200,7 +231,7 @@ export class Sitzung {
       if (s.phase === 'mitHilfe') this.offen.push({ lernziel: s.lernziel, phase: 'neu', bereitAb: this.pos + E.abstandFading });
       // Falsch: später nochmals, andere Variante. Höchstens einmal pro Lernziel und Sitzung.
       a.nochmals = null;
-      if (!b.richtig && !['nochmals', 'mitHilfe', 'kontrolle'].includes(s.phase) && !this.nochmalsGeplant.has(s.lernziel)) {
+      if (!b.richtig && !['nochmals', 'mitHilfe', 'kontrolle', 'vertiefung'].includes(s.phase) && !this.nochmalsGeplant.has(s.lernziel)) {
         this.nochmalsGeplant.add(s.lernziel);
         this.offen.push({ lernziel: s.lernziel, phase: 'nochmals', bereitAb: this.pos + E.abstandNachFehler });
         a.nochmals = this.nochmalsForm(s.lernziel);
@@ -209,7 +240,7 @@ export class Sitzung {
       xp = b.richtig ? (E.xp[s.phase] ?? 0) : 0;
       a.protokoll = {
         sitzung: this.id, aufgabe: a.aufgabe.id, lernziel: s.lernziel, variantengruppe: a.aufgabe.variantengruppe,
-        typ: a.instanz.typ, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
+        typ: a.instanz.typ, stufe: a.aufgabe.stufe ?? null, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
         gewaehlt: typeof b.gewaehlt === 'number' ? b.gewaehlt : JSON.stringify(b.gewaehlt ?? null).slice(0, 200),
         sicherheit, nachPause: this.nachPause, zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit, pVorher,
         kontrolle: kontrolle ? s.stichtag : null, kontrolleIst: kontrolle ? Math.round((jetzt - new Date(kontrolle.ab)) / 864e5 * 10) / 10 : null,
@@ -217,7 +248,8 @@ export class Sitzung {
       };
       this.protokoll.push(a.protokoll);
 
-      if (s.phase !== 'mitHilfe') {
+      // Pausenhinweis: nur Abrufe (ohne «mit Hilfe» und ohne Vertiefung, die bewusst schwerer ist)
+      if (s.phase !== 'mitHilfe' && s.phase !== 'vertiefung') {
         this.ergebnisse.push(b.richtig);
         if (this.pauseHinweisNach === null && pauseNoetig(this.ergebnisse)) { this.pauseHinweisNach = this.ergebnisse.length; pauseHinweis = true; }
       }

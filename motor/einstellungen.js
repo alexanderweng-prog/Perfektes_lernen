@@ -49,10 +49,18 @@ export const EINSTELLUNGEN = Object.freeze({
 
   // Hinweisleiter nach einem Fehler: so viele Versuche pro Aufgabentyp (fehlt = 1, danach Lösung).
   // Zahl: 1. Versuch → Denkanstoss → 2. Versuch → Hilfe → 3. Versuch → Lösung (Annahme). Für FSRS zählt nur der erste.
-  maxVersuche: { zahl: 3 },
+  maxVersuche: { zahl: 3, fehler: 2, daten: 2, vergleich: 2, versuch: 2 }, // höhere Stufen: ein zweiter Versuch nach der Rückmeldung pro Fehler (Annahme)
+
+  // Höhere Taxonomiestufen (Bloom 4–6). Eine Aufgabe ab Stufe 4 ist «Vertiefung»: kommt erst, wenn das Lernziel
+  // als gelernt gilt, zählt nicht für FSRS und Niveau und erscheint nie im Beispiel oder im Fading.
+  hoehereStufen: {
+    abStabilitaetTage: 7,       // gelernt = FSRS-Stabilität mind. so viele Tage (gleich wie «sitzt», Annahme)
+    maxProBlock: 1,             // im Wiederholungsblock höchstens so viele (ohne Simulation)
+    zusatzMax: 2                // im Zusatzblock höchstens so viele (auch mit Simulation, z. B. Vorhersage)
+  },
 
   // Belohnungen
-  xp: { faellig: 10, kontrolle: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, nachHinweis: 2, blockFertig: 20 },
+  xp: { faellig: 10, kontrolle: 10, vertiefung: 12, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, nachHinweis: 2, blockFertig: 20 },
   bonusWahrscheinlichkeit: 0.25, // variable Belohnung nach einer Sitzung
   // Schalter für Belohnungen (Pilot): aus = für das Kind nirgends sichtbar
   schalter: {

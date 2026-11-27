@@ -14,7 +14,7 @@ import { lies, stoppeVorlesen, vorlesenLaeuft, vorlesenMoeglich } from './vorles
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
 const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
 const APP_VERSION = '2026-11-27'; // bei jeder Veröffentlichung anpassen, landet in jedem Protokolleintrag
-const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals', kontrolle: 'Wiederholen', simulation: 'Simulation' };
+const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals', kontrolle: 'Wiederholen', vertiefung: 'Vertiefung', simulation: 'Simulation' };
 const STATUS = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt' };
 
 const $app = document.getElementById('app');
@@ -142,6 +142,40 @@ function eingabeHtml(a, gesperrt) {
       if (!ui.musterGezeigt) return `<textarea id="ein" class="txtin" aria-label="Deine Erklärung">${esc(ui.eingabe || '')}</textarea><button class="btn btn-primary block" data-act="muster">Mit Musterantwort vergleichen</button>`;
       return `<p class="small">Deine Erklärung:</p><p>${esc(ui.eingabe || '–')}</p><div class="hilfe"><b>Musterantwort</b><br>${i.musterantwort}</div>
         <p><b>Wie gut passt deine Erklärung?</b></p><div class="sicher"><button class="btn" data-act="selbst" data-v="passt" ${d}>passt</button><button class="btn" data-act="selbst" data-v="teilweise" ${d}>teilweise</button><button class="btn" data-act="selbst" data-v="fehlt" ${d}>fehlt</button></div>`;
+    // Höhere Stufen (Auswahl aus Bausteinen, kein Freitext)
+    case 'fehler': {
+      const e = ui.eingabe || {};
+      return `<div class="opts">${i.zeilen.map((z, k) => `<label class="opt wahl"><input type="radio" name="zeile" value="${k}" ${e.zeile === k ? 'checked' : ''} ${d}><span class="ltr">${k + 1}</span><span>${z}</span></label>`).join('')}</div>
+        <label class="einst" style="display:flex;margin-top:var(--space-3)">Fehlerart <select class="txtin" data-fehlerart ${d}><option value="">wählen …</option>${i.fehlerarten.map((f, k) => `<option value="${k}" ${e.art === k ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
+        <button class="btn btn-primary block" data-act="pruefen" ${d}>Prüfen</button>`;
+    }
+    case 'daten': {
+      const e = ui.eingabe || [];
+      const t = i.tabelle ? `<table class="dtab"><thead><tr>${i.tabelle.kopf.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${i.tabelle.zeilen.map(z => `<tr>${z.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+      const max = i.grafik ? Math.max(...i.grafik.werte.map(w => w[1])) : 1;
+      const g = i.grafik ? `<div class="grafik">${i.grafik.titel ? `<p class="small">${i.grafik.titel}</p>` : ''}${i.grafik.werte.map(w => `<div class="balken"><span>${w[0]}</span><span><i style="width:${(100 * w[1] / max).toFixed(1)}%"></i></span><span class="mono">${w[1]} ${i.grafik.einheit || ''}</span></div>`).join('')}</div>` : '';
+      return `${t}${g}<div class="opts">${i.aussagen.map((x, k) => `<label class="opt wahl"><input type="checkbox" data-aussage="${k}" ${e[k] ? 'checked' : ''} ${d}><span>${x.text}</span></label>`).join('')}</div>
+        <button class="btn btn-primary block" data-act="pruefen" ${d}>Prüfen</button>`;
+    }
+    case 'vergleich': {
+      const e = ui.eingabe || {};
+      return `<div class="vgl">${i.varianten.map((v, k) => `<label class="opt wahl"><input type="radio" name="wahl" value="${k}" ${e.wahl === k ? 'checked' : ''} ${d}><span><b>${v.titel}</b><br>${v.html}</span></label>`).join('')}</div>
+        <p style="margin-top:var(--space-3)"><b>… ist besser, weil</b></p>
+        <div class="opts">${i.begruendungen.map((b, k) => `<label class="opt wahl"><input type="radio" name="begr" value="${k}" ${e.begruendung === k ? 'checked' : ''} ${d}><span>${b.text}</span></label>`).join('')}</div>
+        <button class="btn btn-primary block" data-act="pruefen" ${d}>Prüfen</button>`;
+    }
+    case 'versuch': {
+      const e = ui.eingabe || {}, ROLLE = [['veraendern', 'verändern'], ['messen', 'messen'], ['konstant', 'gleich lassen'], ['egal', 'egal']];
+      const fragen = i.fragen ? `<p><b>Frage</b></p><div class="opts">${i.fragen.map((f, k) => `<label class="opt wahl"><input type="radio" name="frage" value="${k}" ${e.frage === k ? 'checked' : ''} ${d}><span>${f.text}</span></label>`).join('')}</div><p style="margin-top:var(--space-3)"><b>Versuchsplan</b></p>` : '';
+      return fragen + i.groessen.map((g, k) => `<div class="zrow"><span>${g.text}</span><select class="txtin" data-rolle="${k}" ${d}><option value="">wählen …</option>${ROLLE.map(([w, t]) => `<option value="${w}" ${(e.rollen || [])[k] === w ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`).join('')
+        + `<button class="btn btn-primary block" data-act="pruefen" ${d}>Prüfen</button>`;
+    }
+    case 'vorhersage': {
+      const opts = (name, gewaehlt, aus) => `<div class="opts">${i.optionen.map((o, k) => `<label class="opt wahl"><input type="radio" name="${name}" value="${k}" ${gewaehlt === k ? 'checked' : ''} ${aus}><span>${o.text}</span></label>`).join('')}</div>`;
+      if (ui.vorhersage == null) return `<p><b>Deine Vorhersage</b> (bevor du die Simulation siehst)</p>${opts('vh', null, d)}<button class="btn btn-primary block" data-act="vorhersage" ${d}>Vorhersage festhalten</button>`;
+      return `<p class="small">Deine Vorhersage: <b>${i.optionen[ui.vorhersage].text}</b></p><p><b>Probiere es in der Simulation aus. Was zeigt sie?</b></p>${opts('beob', (ui.eingabe || {}).beobachtung, d)}
+        <button class="btn btn-primary block" data-act="pruefen" ${d}>Prüfen</button>`;
+    }
     default: return '<p>Dieser Aufgabentyp wird noch nicht angezeigt.</p>';
   }
 }
@@ -173,8 +207,11 @@ function vorleseTeile() {
     const e = ui.ergebnis;
     return [{ text: (e.richtig ? 'Richtig. ' : (e.punkte > 0 ? 'Teilweise richtig. ' : 'Nicht ganz. ') + 'Richtig wäre: ' + e.loesung + '. ') + (e.erklaerung || '') + (NOCHMALS[e.nochmals] ? ' ' + NOCHMALS[e.nochmals] : '') }];
   }
-  const opts = i.typ === 'mc' ? i.optionen.map((o, k) => 'Antwort ' + 'ABCDEF'[k] + ': ' + o.text).join('. ') : '';
-  const hinweis = { luecke: 'Fülle die Lücken aus.', zuordnen: 'Ordne richtig zu.', reihenfolge: 'Bringe in die richtige Reihenfolge.', zahl: 'Gib die Zahl ein.' }[i.typ] || '';
+  const liste = { mc: i.optionen, vorhersage: i.optionen, daten: i.aussagen, fehler: (i.zeilen || []).map(text => ({ text })), vergleich: i.varianten && i.varianten.map(v => ({ text: v.titel + ': ' + v.html })) }[i.typ];
+  const opts = liste ? liste.map((o, k) => ('ABCDEF'[k] || k + 1) + ': ' + o.text).join('. ').replace(/<[^>]+>/g, ' ') : '';
+  const hinweis = { luecke: 'Fülle die Lücken aus.', zuordnen: 'Ordne richtig zu.', reihenfolge: 'Bringe in die richtige Reihenfolge.', zahl: 'Gib die Zahl ein.',
+    fehler: 'Markiere die Zeile mit dem Fehler und wähle die Fehlerart.', daten: 'Kreuze alle Aussagen an, die zu den Daten passen.',
+    vergleich: 'Wähle das bessere und die passende Begründung.', versuch: 'Lege für jede Grösse fest, was mit ihr passiert.', vorhersage: 'Gib zuerst deine Vorhersage ab.' }[i.typ] || '';
   return [{ text: [String(i.text).replace(/___/g, ' Lücke '), opts, hinweis].filter(Boolean).join('. ') }];
 }
 
@@ -215,7 +252,9 @@ function denkanstossHtml(a) {
 }
 function hinweiseHtml(a, r) {
   const stufe = r.nochVersuch ? r.hilfsstufe : 1;
-  return denkanstossHtml(a) + (stufe >= 2 && !a.zeigeHilfe ? hilfeHtml(a) : '');
+  // Höhere Stufen: Rückmeldung pro Fehler (verrät die Lösung nicht) vor dem Denkanstoss
+  const proFehler = r.hinweise && r.hinweise.length ? `<div class="hilfe"><b>Rückmeldung:</b><ul>${r.hinweise.map(h => `<li>${h}</li>`).join('')}</ul></div>` : '';
+  return proFehler + denkanstossHtml(a) + (stufe >= 2 && !a.zeigeHilfe ? hilfeHtml(a) : '');
 }
 // Lösung erst nach der Leiter: bei Zahl nach dem letzten Versuch, sonst nach «Lösung zeigen». Selbsterklärung ohne Leiter.
 const loesungSichtbar = () => {
@@ -240,13 +279,14 @@ function rundeHtml() {
     const sicherheit = ui.frageSicherheit && !fertig
       ? `<div class="hilfe"><p><b>Wie sicher bist du?</b></p><div class="sicher"><button class="btn" data-act="sicher" data-v="sicher">sicher</button><button class="btn" data-act="sicher" data-v="unsicher">unsicher</button><button class="btn" data-act="sicher" data-v="geraten">geraten</button></div></div>` : '';
     const fb = ui.warnung ? `<div class="fb warn"><div class="fbb">${esc(ui.warnung)}</div></div>` : '';
-    const leiter = ui.ergebnis && !loesungSichtbar() ? `<div class="fb warn"><div class="fbt">Nicht ganz.${ui.ergebnis.einheitFalsch ? ' Die Einheit passt nicht.' : ''}${ui.ergebnis.nochVersuch ? ' Versuch es nochmals.' : ''}</div></div>${hinweiseHtml(a, ui.ergebnis)}
+    const leiter = ui.ergebnis && !loesungSichtbar() ? `<div class="fb warn"><div class="fbt">${ui.ergebnis.punkte > 0 ? 'Teilweise richtig.' : 'Nicht ganz.'}${ui.ergebnis.einheitFalsch ? ' Die Einheit passt nicht.' : ''}${ui.ergebnis.nochVersuch ? ' Versuch es nochmals.' : ''}</div></div>${hinweiseHtml(a, ui.ergebnis)}
         ${ui.ergebnis.nochVersuch ? '' : '<button class="btn btn-primary block" data-act="loesung" id="weiterBtn">Lösung zeigen</button>'}` : '';
     const erg = loesungSichtbar() ? `<div class="fb ${ui.ergebnis.richtig ? 'good' : ui.ergebnis.punkte > 0 ? 'warn' : 'bad'}">
         <div class="fbt">${ui.ergebnis.richtig ? 'Richtig.' : ui.ergebnis.punkte > 0 ? 'Teilweise richtig.' : 'Nicht ganz.'}${ui.ergebnis.xp ? ` <span class="mono">+${ui.ergebnis.xp} XP</span>` : ''}</div>
         <div class="fbb">${ui.ergebnis.richtig ? '' : `Richtig wäre: <b>${ui.ergebnis.loesung}</b><br>`}${ui.ergebnis.erklaerung || ''}${NOCHMALS[ui.ergebnis.nochmals] ? `<br><br>${NOCHMALS[ui.ergebnis.nochmals]}` : ''}</div></div>
         <button class="btn btn-primary block" data-act="weiter" id="weiterBtn">Weiter</button>` : '';
-    const simZuerst = a.aufgabe.simulation ? simHtml({ simulationen: (a.lernziel.simulationen || []).filter(x => x.id === a.aufgabe.simulation) }) : '';
+    // Vorhersage: Simulation erst, wenn die Vorhersage festgehalten ist
+    const simZuerst = a.aufgabe.simulation && (a.instanz.typ !== 'vorhersage' || ui.vorhersage != null) ? simHtml({ simulationen: (a.lernziel.simulationen || []).filter(x => x.id === a.aufgabe.simulation) }) : '';
     inhalt = `<section class="card"><div class="row" style="margin:0 0 var(--space-2)"><p class="small" style="margin:0">${esc(a.lernziel.titel)}</p>${vorleseKnopf()}</div>${simZuerst}<div class="q">${a.instanz.text}</div>
       ${a.zeigeHilfe ? hilfeHtml(a) : ''}${eingabeHtml(a, fertig || ui.frageSicherheit)}${sicherheit}${fb}${leiter}${erg}</section>`;
   }
@@ -315,6 +355,13 @@ function sammleEingabe() {
   if (i.typ === 'zahl' || i.typ === 'erklaeren') { const el = document.getElementById('ein'); return el ? el.value : ui.eingabe; }
   if (i.typ === 'luecke') return [...document.querySelectorAll('[data-luecke]')].map(x => x.value);
   if (i.typ === 'zuordnen') return [...document.querySelectorAll('[data-zuordnung]')].map(x => x.value);
+  const gewaehlt = name => { const x = document.querySelector(`input[name="${name}"]:checked`); return x ? +x.value : undefined; };
+  const auswahl = sel => { const x = document.querySelector(sel); return x && x.value !== '' ? +x.value : undefined; };
+  if (i.typ === 'fehler') return { zeile: gewaehlt('zeile'), art: auswahl('[data-fehlerart]') };
+  if (i.typ === 'daten') return [...document.querySelectorAll('[data-aussage]')].map(x => x.checked);
+  if (i.typ === 'vergleich') return { wahl: gewaehlt('wahl'), begruendung: gewaehlt('begr') };
+  if (i.typ === 'versuch') return { frage: gewaehlt('frage'), rollen: [...document.querySelectorAll('[data-rolle]')].map(x => x.value) };
+  if (i.typ === 'vorhersage') return { vorhersage: ui.vorhersage, beobachtung: gewaehlt('beob') };
   return ui.eingabe;
 }
 
@@ -390,6 +437,11 @@ $app.addEventListener('click', e => {
   else if (act === 'hoch' || act === 'runter') {
     const k = +b.dataset.k, j = act === 'hoch' ? k - 1 : k + 1, f = ui.eingabe.slice();
     [f[k], f[j]] = [f[j], f[k]]; ui.eingabe = f; render();
+  }
+  else if (act === 'vorhersage') {
+    const v = document.querySelector('input[name="vh"]:checked');
+    if (!v) { ui.warnung = 'Wähle zuerst deine Vorhersage.'; return render(); }
+    ui.vorhersage = +v.value; ui.warnung = null; render();
   }
   else if (act === 'loesung') { ui.loesungGezeigt = true; render(); }
   else if (act === 'sicher') { ui.sicherheit = b.dataset.v; werte(); }

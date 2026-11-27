@@ -1,4 +1,4 @@
--- SQL-Tests für backend/migrationen/2026-11-protokoll-pilot.sql: neue Protokollfelder, Beispiele, Klassenwertung aus.
+-- SQL-Tests für backend/migrationen/2026-11-protokoll-pilot.sql und 2026-11-stufen.sql: neue Protokollfelder, Beispiele, Klassenwertung aus.
 -- Eine Transaktion, wird am Ende zurückgerollt. Nur gegen eine TESTdatenbank.
 --   psql "<Verbindungsstring der Testdatenbank>" -v ON_ERROR_STOP=1 -f test/backend/protokoll_tests.sql
 
@@ -37,7 +37,7 @@ select public.lm_sync(pg_temp.wert('code'), 'leistung', '{}', null, jsonb_build_
                      'versuch', 3, 'hilfsstufe', 2, 'richtigAmEnde', true, 'app', '2026-11-27', 'einstellungen', 'eabc'),
   jsonb_build_object('sitzung', 's1', 'aufgabe', 'q3', 'lernziel', 'lz2', 'typ', 'mc', 'phase', 'kontrolle', 'richtig', true, 'punkte', 1,
                      'gewaehlt', 0, 'zeit', now(), 'dauerMs', 5000, 'pVorher', 0.5, 'kontrolle', 14, 'kontrolleIst', 15.2,
-                     'versuch', 1, 'hilfsstufe', 0, 'richtigAmEnde', true, 'app', '2026-11-27', 'einstellungen', 'eabc')),
+                     'versuch', 1, 'hilfsstufe', 0, 'richtigAmEnde', true, 'app', '2026-11-27', 'einstellungen', 'eabc', 'stufe', 4)),
   jsonb_build_array(jsonb_build_object('id', 's1', 'art', 'block', 'start', now() - interval '5 minutes', 'ende', now(),
                                        'aufgaben', 2, 'abrufe', 2, 'richtig', 1, 'app', '2026-11-27', 'einstellungen', 'eabc')));
 select pg_temp.setze('wertung', public.lm_klassenwertung(pg_temp.wert('code'))::text);
@@ -54,6 +54,8 @@ select pg_temp.pruefe(exists (select 1 from lernmotor.antworten where lernende =
   and app_version = '2026-11-27' and einstellungen = 'eabc'), 'P3 Vorhersage, Hinweisleiter und Versionen gespeichert');
 select pg_temp.pruefe(exists (select 1 from lernmotor.antworten where lernende = pg_temp.wert('kind')::uuid and aufgabe = 'q3'
   and phase = 'kontrolle' and kontrolle = 14 and abs(kontrolle_ist - 15.2) < 1e-4), 'P4 Kontrollfrage markiert (Stichtag und tatsächlicher Abstand)');
+select pg_temp.pruefe((select stufe from lernmotor.antworten where lernende = pg_temp.wert('kind')::uuid and aufgabe = 'q3') = 4
+  and (select stufe from lernmotor.antworten where lernende = pg_temp.wert('kind')::uuid and aufgabe = 'q2') is null, 'P4b Taxonomiestufe gespeichert (ohne Angabe: null)');
 select pg_temp.pruefe(exists (select 1 from lernmotor.sitzungen where lernende = pg_temp.wert('kind')::uuid and app_version = '2026-11-27'
   and einstellungen = 'eabc'), 'P5 Sitzung mit Versionen');
 select pg_temp.pruefe(pg_temp.wert('wertung')::jsonb = '[]'::jsonb, 'P6 Klassenwertung ist serverseitig aus');

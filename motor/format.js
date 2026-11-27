@@ -1,7 +1,12 @@
 // Gemeinsames Aufgabenformat (siehe docs/aufgabenformat.md).
 // Der Motor kennt kein Fach. Er liest nur Pakete in diesem Format.
 
-export const TYPEN = ['mc', 'zahl', 'luecke', 'zuordnen', 'reihenfolge', 'erklaeren'];
+export const TYPEN = ['mc', 'zahl', 'luecke', 'zuordnen', 'reihenfolge', 'erklaeren', 'fehler', 'daten', 'vergleich', 'versuch', 'vorhersage'];
+export const ROLLEN = ['veraendern', 'messen', 'konstant', 'egal']; // Typ «versuch»: Rolle einer Grösse im Versuchsplan
+
+// Taxonomiestufe nach Bloom (1 erinnern … 6 erschaffen). Ohne Feld: Grundstufe (1–3).
+// Aufgaben ab Stufe 4 sind «Vertiefung»: erst nach dem Lernen freigeschaltet, nie im Fading oder als FSRS-Abruf.
+export const hoheStufe = a => (a.stufe || 0) >= 4;
 export const PRUEFSTATUS = ['entwurf', 'geprueft', 'zurueckgezogen'];
 
 // Eine Aufgabe ist entweder statisch (Felder direkt) oder hat erzeuge(), das bei jedem Aufruf
@@ -53,8 +58,11 @@ export function pruefePaket(paket, { durchlaeufe = 20 } = {}) {
     if (!a.variantengruppe) f.push(`${wo}: Variantengruppe fehlt`);
     if (!a.quelle) f.push(`${wo}: Quelle fehlt`);
     if (!PRUEFSTATUS.includes(a.pruefstatus)) f.push(`${wo}: Prüfstatus ${a.pruefstatus} ungültig`);
+    if (a.stufe !== undefined && !(Number.isInteger(a.stufe) && a.stufe >= 1 && a.stufe <= 6)) f.push(`${wo}: Stufe muss 1–6 sein`);
+    if (hoheStufe(a) && !a.stufe_begruendung) f.push(`${wo}: ab Stufe 4 braucht es stufe_begruendung`);
+    if (a.typ === 'vorhersage' && !a.simulation) f.push(`${wo}: Vorhersage braucht eine Simulation`);
     if (a.simulation && !(paket.simulationen && typeof paket.simulationen[a.simulation] === 'function')) f.push(`${wo}: Simulation ${a.simulation} fehlt im Paket`);
-    if (a.pruefstatus === 'geprueft' && !a.simulation) proLernziel.set(a.lernziel, (proLernziel.get(a.lernziel) || 0) + 1);
+    if (a.pruefstatus === 'geprueft' && !a.simulation && !hoheStufe(a)) proLernziel.set(a.lernziel, (proLernziel.get(a.lernziel) || 0) + 1);
     const n = typeof a.erzeuge === 'function' ? durchlaeufe : 1;
     for (let k = 0; k < n; k++) {
       let i;
@@ -89,6 +97,34 @@ function pruefeInstanz(i) {
     case 'zuordnen': return (i.paare || []).length >= 2 ? null : 'Zuordnen braucht mind. 2 Paare';
     case 'reihenfolge': return (i.elemente || []).length >= 2 ? null : 'Reihenfolge braucht mind. 2 Elemente';
     case 'erklaeren': return i.musterantwort ? null : 'Erklären braucht eine Musterantwort';
+    case 'fehler': {
+      const z = i.zeilen || [], arten = i.fehlerarten || [];
+      if (z.length < 2 || arten.length < 2) return 'Fehler finden braucht mind. 2 Zeilen und 2 Fehlerarten';
+      return z[i.fehlerZeile] !== undefined && arten[i.fehlerArt] !== undefined ? null : 'Fehler finden: fehlerZeile oder fehlerArt ungültig';
+    }
+    case 'daten': {
+      if (!(i.tabelle && i.tabelle.kopf && i.tabelle.zeilen) && !(i.grafik && i.grafik.werte)) return 'Datenanalyse braucht eine Tabelle oder Grafik';
+      const n = (i.aussagen || []).filter(x => x.richtig).length;
+      if ((i.aussagen || []).length < 3) return 'Datenanalyse braucht mind. 3 Aussagen';
+      return n === 1 || n === 2 ? null : `Datenanalyse: 1 oder 2 Aussagen müssen stimmen (hat ${n})`;
+    }
+    case 'vergleich': {
+      if ((i.varianten || []).length !== 2 || ![0, 1].includes(i.besser)) return 'Vergleich braucht 2 Varianten und besser = 0 oder 1';
+      const n = (i.begruendungen || []).filter(x => x.richtig).length;
+      return (i.begruendungen || []).length >= 2 && n === 1 ? null : 'Vergleich braucht mind. 2 Begründungen, genau 1 passend';
+    }
+    case 'versuch': {
+      const g = i.groessen || [];
+      const rollen = x => [].concat(x.rolle);
+      if (g.length < 3 || g.some(x => !rollen(x).every(r => ROLLEN.includes(r)))) return 'Versuch planen braucht mind. 3 Grössen mit gültiger Rolle';
+      for (const r of ['veraendern', 'messen']) if (!g.some(x => rollen(x).includes(r))) return `Versuch planen: keine Grösse mit Rolle «${r}»`;
+      if (i.fragen && i.fragen.filter(x => x.richtig).length !== 1) return 'Versuch planen: genau 1 passende Frage';
+      return null;
+    }
+    case 'vorhersage': {
+      const n = (i.optionen || []).filter(o => o.richtig).length;
+      return (i.optionen || []).length >= 2 && n === 1 ? null : 'Vorhersage braucht mind. 2 Optionen, genau 1 richtig';
+    }
     default: return `unbekannter Typ ${i.typ}`;
   }
 }
