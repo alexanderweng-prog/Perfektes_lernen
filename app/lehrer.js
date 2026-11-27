@@ -37,13 +37,24 @@ function loginHtml() {
 }
 
 function klassenHtml() {
-  const liste = (ui.klassen || []).map(k => `<li><span><b>${esc(k.name)}</b><br><span class="small">${esc(k.teamname)} · Klassencode <span class="mono">${esc(k.klassencode)}</span> · ${k.mitglieder} Kinder · gelöscht ab ${esc(k.loeschen_ab)}</span></span>
+  const liste = (ui.klassen || []).map(k => `<li><span><b>${esc(k.name)}</b><br><span class="small">${esc(k.teamname)} · Klassencode <span class="mono">${esc(k.klassencode)}</span> · ${k.mitglieder} Kinder · Kapitel: ${Array.isArray(k.kapitel) ? `${k.kapitel.length} von ${KATALOG.length}` : 'alle'} · gelöscht ab ${esc(k.loeschen_ab)}</span></span>
     <span class="btnrow"><button class="btn sm" data-act="oeffnen" data-id="${k.id}">Auswertung</button></span></li>`).join('');
   return `<section class="card"><div class="tag">Meine Klassen</div>
     ${liste ? `<ul class="lzlist">${liste}</ul>` : '<p>Noch keine Klasse.</p>'}
     <form data-form="klasse" class="ansrow" style="margin-top:var(--space-4)"><input id="kname" class="txtin" maxlength="40" placeholder="z. B. 2a NuT" aria-label="Name der Klasse"><button class="btn">Klasse anlegen</button></form>
     <p class="small" style="margin-top:var(--space-3)"><button class="btn sm" data-act="pruefen">Neue Inhalte prüfen und freigeben</button></p>
     <p class="small">Den Klassencode schreiben Sie an die Tafel. Die Kinder geben ihn unter «Neu hier» ein und erhalten ihren persönlichen Lerncode. Den Lerncode sehen nur die Kinder.</p></section>`;
+}
+
+// Kapitel, die eine Klasse sieht (null = alle)
+const kapitelDer = k => (Array.isArray(k.kapitel) ? KATALOG.filter(p => k.kapitel.includes(p.id)) : KATALOG);
+function kapitelHtml(k) {
+  const an = p => !Array.isArray(k.kapitel) || k.kapitel.includes(p.id);
+  return `<details class="card"${ui.kapitelOffen ? ' open' : ''}><summary><span>Kapitel für diese Klasse</span><span class="small">${Array.isArray(k.kapitel) ? `${k.kapitel.length} von ${KATALOG.length}` : 'alle'}</span></summary>
+    <p class="small">Die Kinder sehen nur die angehakten Kapitel. Sie können das jederzeit ändern; die Kinder sehen die Änderung beim nächsten Öffnen der App oder wenn sie zur Übersicht zurückkehren. Lernstand und Antworten in abgewählten Kapiteln bleiben erhalten.</p>
+    <div class="btnrow"><button class="btn sm" data-act="kapitelAlle">Alle anhaken</button><button class="btn sm" data-act="kapitelKeine">Keine</button></div>
+    <div style="display:grid;gap:6px;margin:var(--space-3) 0">${KATALOG.map(p => `<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" data-kapitel value="${p.id}" ${an(p) ? 'checked' : ''}><span>${esc(p.kapitel)}: ${esc(p.titel)}</span></label>`).join('')}</div>
+    <button class="btn btn-primary" data-act="kapitelSpeichern">Speichern</button>${ui.kapitelMeldung ? `<p class="small">${esc(ui.kapitelMeldung)}</p>` : ''}</details>`;
 }
 
 const titelLz = id => { const l = ui.paket && ui.paket.lernziele.find(x => x.id === id); return l ? l.titel : id; };
@@ -57,9 +68,10 @@ function aufgabeInfo(id, nr) {
 
 function auswertungHtml() {
   const k = ui.klassen.find(x => x.id === ui.klasse), d = ui.daten;
-  const pakete = KATALOG.map(p => `<option value="${p.id}" ${p.id === ui.paketId ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
+  const pakete = kapitelDer(k).map(p => `<option value="${p.id}" ${p.id === ui.paketId ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
   let inhalt = '<p>Lädt …</p>';
-  if (d && d.zuKlein) inhalt = `<section class="card"><p>Die Klasse hat erst ${d.mitglieder} Kinder mit Lerncode. Auswertungen gibt es ab ${d.minGruppe} Kindern.</p></section>`;
+  if (!kapitelDer(k).length) inhalt = '<section class="card"><p>Für diese Klasse ist im Moment kein Kapitel angehakt. Die Kinder können nicht üben.</p></section>';
+  else if (d && d.zuKlein) inhalt = `<section class="card"><p>Die Klasse hat erst ${d.mitglieder} Kinder mit Lerncode. Auswertungen gibt es ab ${d.minGruppe} Kindern.</p></section>`;
   else if (d) {
     const leer = t => `<p class="small">${t}</p>`;
     const ue = d.uebersicht == null ? leer(`Erst ${d.aktiv} Kinder haben dieses Thema geübt (mindestens ${d.minGruppe} nötig).`)
@@ -90,6 +102,7 @@ function auswertungHtml() {
       <button class="btn sm" data-act="zurueck">Alle Klassen</button></div>
     <label class="einst" style="display:flex;margin-top:var(--space-3)">Thema <select data-act="paket">${pakete}</select></label></section>
     ${inhalt}
+    ${kapitelHtml(k)}
     <details class="card"><summary><span>Klasse löschen</span></summary><p class="small">Löscht die Klasse mit allen Lerncodes und Antworten sofort. Automatisch passiert das am ${esc(k.loeschen_ab)}.</p>
       ${ui.loeschen ? '<div class="btnrow"><button class="btn sm" data-act="loeschenJa">Endgültig löschen</button><button class="btn sm" data-act="loeschenNein">Abbrechen</button></div>' : '<button class="btn sm" data-act="loeschen">Löschen …</button>'}</details>`;
 }
@@ -163,6 +176,24 @@ function render() {
   $app.innerHTML = `${kopf(kopfExtra)}<main class="wrap"><div class="stack-v">${fehlerHtml()}${ui.pruefen ? pruefenHtml() : ui.klasse ? auswertungHtml() : ui.klassen ? klassenHtml() : '<p>Lädt …</p>'}${fuss}</div></main>`;
 }
 
+// Auswertung nur für Kapitel der Klasse: ist das gewählte nicht dabei, das erste erlaubte nehmen
+function waehleErlaubtesKapitel() {
+  const k = ui.klassen.find(x => x.id === ui.klasse), erlaubt = kapitelDer(k);
+  if (!erlaubt.length) { ui.daten = null; return render(); }
+  if (!erlaubt.some(p => p.id === ui.paketId)) ui.paketId = erlaubt[0].id;
+  ladeAuswertung();
+}
+async function speichereKapitel() {
+  const ids = [...document.querySelectorAll('[data-kapitel]')].filter(x => x.checked).map(x => x.value);
+  try {
+    await aufruf('lm_klasse_kapitel_setzen', { p_klasse: ui.klasse, p_kapitel: ids.length === KATALOG.length ? null : ids });
+    ui.klassen = await aufruf('lm_meine_klassen', {});
+    ui.kapitelMeldung = `Gespeichert: ${ids.length === KATALOG.length ? 'alle Kapitel' : ids.length + ' von ' + KATALOG.length + ' Kapiteln'}.`;
+    ui.kapitelOffen = true; ui.fehler = null;
+    waehleErlaubtesKapitel();
+  } catch (e) { ui.fehler = e.message; render(); }
+}
+
 async function ladeKlassen() {
   try { ui.klassen = await aufruf('lm_meine_klassen', {}); ui.fehler = null; } catch (e) { ui.fehler = e.message; }
   render();
@@ -225,7 +256,9 @@ $app.addEventListener('click', async e => {
   else if (a === 'alleZurueckJa') { ui.alleZurueckBestaetigen = false; setzeFreigabe(ui.pruefPaket.entwuerfe.filter(x => x.status === 'geprueft').map(x => x.id), 'zurueckgezogen'); }
   else if (a === 'freigabe') setzeFreigabe([b.dataset.id], b.dataset.s);
   else if (a === 'neuRendern') render();
-  else if (a === 'oeffnen') { ui.klasse = b.dataset.id; ui.loeschen = false; ladeAuswertung(); }
+  else if (a === 'oeffnen') { ui.klasse = b.dataset.id; ui.loeschen = false; ui.kapitelMeldung = null; ui.kapitelOffen = false; waehleErlaubtesKapitel(); }
+  else if (a === 'kapitelAlle' || a === 'kapitelKeine') document.querySelectorAll('[data-kapitel]').forEach(x => { x.checked = a === 'kapitelAlle'; });
+  else if (a === 'kapitelSpeichern') speichereKapitel();
   else if (a === 'zurueck') { ui.klasse = null; ui.daten = null; ui.pruefen = false; ladeKlassen(); }
   else if (a === 'csv') csv();
   else if (a === 'loeschen') { ui.loeschen = true; render(); }
