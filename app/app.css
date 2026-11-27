@@ -69,3 +69,14 @@ label.einst select, .einst select { flex: 1 1 12rem; min-width: 0; width: 100%; 
 .dna { margin: var(--space-3) 0; overflow-x: auto; }
 .dstrang { display: flex; gap: 4px; margin: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .flame.on { animation: none; } }
+
+/* Höhere Stufen: Auswahl mit Radio/Checkbox, Datentabelle, Balkengrafik, Vergleich */
+.opt.wahl { display: flex; gap: var(--space-3); align-items: flex-start; cursor: pointer; }
+.opt.wahl input { margin-top: 4px; flex: none; }
+.dtab { width: 100%; border-collapse: collapse; margin-bottom: var(--space-4); }
+.dtab th, .dtab td { border: 2px solid var(--line-soft); padding: var(--space-2); text-align: left; }
+.grafik { margin-bottom: var(--space-4); }
+.balken { display: grid; grid-template-columns: 7em 1fr auto; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+.balken i { display: block; height: 14px; background: var(--primary); border-radius: 4px; }
+.vgl { display: grid; gap: var(--space-3); }
+@media (min-width: 640px) { .vgl { grid-template-columns: 1fr 1fr; } }
