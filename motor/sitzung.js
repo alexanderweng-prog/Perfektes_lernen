@@ -29,11 +29,19 @@ export function zaehleFaellige(paket, modell, { jetzt = new Date(), freigabe } =
   return freigegebeneLernziele(paket, freigabe).filter(l => istFaellig(modell, l.id, jetzt)).length;
 }
 
-// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb
-export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], zufall = Math.random, simulation = false } = {}) {
+// Geprüfte Aufgaben eines Lernziels, die in einer Phase in Frage kommen.
+// Aufgaben mit Simulation kommen nur im Zusatzblock (Phase «simulation»), alle anderen nur ausserhalb.
+function kandidatenFuer(paket, lernzielId, simulation) {
   const geprueft = paket.aufgaben.filter(a => a.lernziel === lernzielId && a.pruefstatus === 'geprueft');
   const passend = geprueft.filter(a => !!a.simulation === simulation);
-  const alle = passend.length ? passend : geprueft;
+  return passend.length ? passend : geprueft;
+}
+const gruppenZahl = (paket, lernzielId) => new Set(kandidatenFuer(paket, lernzielId, false).map(a => a.variantengruppe)).size;
+
+// ohneGruppen: möglichst meiden (Rückfall erlaubt). gesperrt: nie (z. B. die vorgerechnete Aufgabe aus dem Beispiel).
+export function waehleAufgabe(paket, lernzielId, niveau, { ohneGruppen = [], gesperrt = [], zufall = Math.random, simulation = false } = {}) {
+  const alle = kandidatenFuer(paket, lernzielId, simulation).filter(a => !gesperrt.includes(a.variantengruppe));
+  if (!alle.length) return undefined;
   const andere = alle.filter(a => !ohneGruppen.includes(a.variantengruppe));
   const pool = andere.length ? andere : alle;
   const abstand = a => Math.abs(a.schwierigkeit - niveau);
@@ -56,6 +64,7 @@ export class Sitzung {
     this.nachPause = false; this.pauseHinweisNach = null; this.beendet = false; this.aktuell = null;
     this.nochmalsGeplant = new Set();
     this.gruppenInSitzung = new Map(); // Lernziel → benutzte Variantengruppen
+    this.vorgerechnet = new Map();     // Lernziel → im Beispiel vorgerechnete Variantengruppe
     this.offen = this.plane(freigabe);
     // geschätzte Zahl Aufgaben: fällige + pro neuem Lernziel zwei (mit Hilfe, ohne Hilfe)
     this.geplant = this.offen.filter(s => s.phase === 'faellig').length + 2 * this.offen.filter(s => s.phase === 'beispiel').length;
@@ -118,13 +127,19 @@ export class Sitzung {
     const benutzt = this.gruppenInSitzung.get(schritt.lernziel) || [];
     const e = eintrag(this.modell, schritt.lernziel);
     const ohneGruppen = [...benutzt, ...(e && e.letzteGruppe ? [e.letzteGruppe] : [])];
-    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
+    // «ohne Hilfe» und «nochmals» dürfen die im Beispiel vorgerechnete Aufgabe nie bringen
+    const vorgerechnet = this.vorgerechnet.get(schritt.lernziel);
+    const gesperrt = vorgerechnet && (schritt.phase === 'neu' || schritt.phase === 'nochmals') ? [vorgerechnet] : [];
+    const aufgabe = waehleAufgabe(this.paket, schritt.lernziel, this.modell.niveau, { ohneGruppen, gesperrt, zufall: this.zufall, simulation: schritt.phase === 'simulation' });
     this.gruppenInSitzung.set(schritt.lernziel, [...benutzt, aufgabe.variantengruppe]);
+    // Hat das Lernziel nur eine Variantengruppe, wird im Beispiel nichts vorgerechnet (sonst käme die Lösung später wieder)
+    const zeigeVorgerechnet = schritt.phase === 'beispiel' && gruppenZahl(this.paket, schritt.lernziel) > 1;
+    if (zeigeVorgerechnet) this.vorgerechnet.set(schritt.lernziel, aufgabe.variantengruppe);
     const abruf = schritt.phase === 'faellig' || schritt.phase === 'neu';
     this.aktuell = {
       schritt, aufgabe, instanz: instanz(aufgabe, this.zufall), seit: this.uhr(),
       lernziel: this.paket.lernziele.find(l => l.id === schritt.lernziel),
-      zeigeHilfe: schritt.phase === 'mitHilfe',
+      zeigeHilfe: schritt.phase === 'mitHilfe', zeigeVorgerechnet,
       fragSicherheit: abruf && this.zufall() < E.anteilSicherheitsfrage
     };
     this.pos++;
@@ -139,39 +154,66 @@ export class Sitzung {
   }
 
   // Antwort auf den aktuellen Schritt. Gibt die Bewertung plus Zusatzinfos zurück.
+  // Hinweisleiter: Bei Zahlaufgaben sind nach einem Fehler weitere Versuche erlaubt (E.maxVersuche).
+  // Nur der erste Versuch zählt für Planer, Pausenhinweis und «nochmals»; spätere ergänzen nur den Protokolleintrag.
+  // hilfsstufe = höchste gezeigte Stufe: 0 keine, 1 Denkanstoss, 2 Hilfe, 3 Lösung.
   antworte(antwort, sicherheit = null) {
     const a = this.aktuell;
     const b = bewerte(a.instanz, antwort);
     if (!b.gueltig) return b;
     const s = a.schritt, jetzt = this.uhr();
-    const zaehltFuerPlaner = s.phase === 'faellig' || s.phase === 'neu';
-    this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
-    const e = this.modell.lernziele[s.lernziel];
-    this.modell.lernziele[s.lernziel] = { ...e, letzteGruppe: a.aufgabe.variantengruppe };
+    a.versuch = (a.versuch || 0) + 1;
+    const nochVersuch = !b.richtig && a.versuch < (E.maxVersuche[a.instanz.typ] || 1);
+    if (!b.richtig) a.hilfsstufe = nochVersuch ? a.versuch : 3;
+    let xp, pauseHinweis = false;
 
-    // Fading weiterführen
-    if (s.phase === 'mitHilfe') this.offen.push({ lernziel: s.lernziel, phase: 'neu', bereitAb: this.pos + E.abstandFading });
-    // Falsch: später nochmals, andere Variante. Höchstens einmal pro Lernziel und Sitzung.
-    if (!b.richtig && s.phase !== 'nochmals' && s.phase !== 'mitHilfe' && !this.nochmalsGeplant.has(s.lernziel)) {
-      this.nochmalsGeplant.add(s.lernziel);
-      this.offen.push({ lernziel: s.lernziel, phase: 'nochmals', bereitAb: this.pos + E.abstandNachFehler });
+    if (a.versuch === 1) {
+      const zaehltFuerPlaner = s.phase === 'faellig' || s.phase === 'neu';
+      this.modell = verbuche(this.modell, s.lernziel, { punkte: b.punkte, sicherheit, nachPause: this.nachPause, zaehltFuerPlaner }, jetzt);
+      const e = this.modell.lernziele[s.lernziel];
+      this.modell.lernziele[s.lernziel] = { ...e, letzteGruppe: a.aufgabe.variantengruppe };
+
+      // Fading weiterführen
+      if (s.phase === 'mitHilfe') this.offen.push({ lernziel: s.lernziel, phase: 'neu', bereitAb: this.pos + E.abstandFading });
+      // Falsch: später nochmals, andere Variante. Höchstens einmal pro Lernziel und Sitzung.
+      a.nochmals = null;
+      if (!b.richtig && s.phase !== 'nochmals' && s.phase !== 'mitHilfe' && !this.nochmalsGeplant.has(s.lernziel)) {
+        this.nochmalsGeplant.add(s.lernziel);
+        this.offen.push({ lernziel: s.lernziel, phase: 'nochmals', bereitAb: this.pos + E.abstandNachFehler });
+        a.nochmals = this.nochmalsForm(s.lernziel);
+      }
+
+      xp = b.richtig ? (E.xp[s.phase] ?? 0) : 0;
+      a.protokoll = {
+        sitzung: this.id, aufgabe: a.aufgabe.id, lernziel: s.lernziel, variantengruppe: a.aufgabe.variantengruppe,
+        typ: a.instanz.typ, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
+        gewaehlt: typeof b.gewaehlt === 'number' ? b.gewaehlt : JSON.stringify(b.gewaehlt ?? null).slice(0, 200),
+        sicherheit, nachPause: this.nachPause, zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit
+      };
+      this.protokoll.push(a.protokoll);
+
+      if (s.phase !== 'mitHilfe') {
+        this.ergebnisse.push(b.richtig);
+        if (this.pauseHinweisNach === null && pauseNoetig(this.ergebnisse)) { this.pauseHinweisNach = this.ergebnisse.length; pauseHinweis = true; }
+      }
+    } else {
+      xp = b.richtig ? E.xp.nachHinweis : 0;
     }
-
-    const xp = b.richtig ? (E.xp[s.phase] ?? 0) : 0;
+    Object.assign(a.protokoll, { versuch: a.versuch, hilfsstufe: a.hilfsstufe || 0, richtigAmEnde: b.richtig });
     this.xp += xp;
-    this.protokoll.push({
-      sitzung: this.id, aufgabe: a.aufgabe.id, lernziel: s.lernziel, variantengruppe: a.aufgabe.variantengruppe,
-      typ: a.instanz.typ, phase: s.phase, richtig: b.richtig, punkte: b.punkte,
-      gewaehlt: typeof b.gewaehlt === 'number' ? b.gewaehlt : JSON.stringify(b.gewaehlt ?? null).slice(0, 200),
-      sicherheit, nachPause: this.nachPause, zeit: jetzt.toISOString(), dauerMs: jetzt - a.seit
-    });
+    return {
+      ...b, xp, fehlvorstellung: a.versuch === 1 && !b.richtig && sicherheit === 'sicher', pauseHinweis,
+      nochmals: a.nochmals, versuch: a.versuch, hilfsstufe: a.hilfsstufe || 0, nochVersuch, fertig: !nochVersuch
+    };
+  }
 
-    let pauseHinweis = false;
-    if (s.phase !== 'mitHilfe') {
-      this.ergebnisse.push(b.richtig);
-      if (this.pauseHinweisNach === null && pauseNoetig(this.ergebnisse)) { this.pauseHinweisNach = this.ergebnisse.length; pauseHinweis = true; }
-    }
-    return { ...b, xp, fehlvorstellung: !b.richtig && sicherheit === 'sicher', pauseHinweis };
+  // Kommt die Wiederholung in anderer Form? Nur wenn es eine Variantengruppe gibt, die in dieser Sitzung
+  // noch nicht dran war und nicht gesperrt ist. Sonst kommt dieselbe Aufgabe (bei Zahlaufgaben evtl. mit neuen Zahlen).
+  nochmalsForm(lernzielId) {
+    const benutzt = this.gruppenInSitzung.get(lernzielId) || [];
+    const frei = kandidatenFuer(this.paket, lernzielId, false)
+      .some(a => !benutzt.includes(a.variantengruppe) && a.variantengruppe !== this.vorgerechnet.get(lernzielId));
+    return frei ? 'andereForm' : 'gleicheForm';
   }
 
   // Das Kind entscheidet nach dem Pausenhinweis selbst

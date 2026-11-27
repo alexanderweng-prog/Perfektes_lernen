@@ -136,6 +136,89 @@ test('Sitzung: Fällige zuerst und gemischt, Obergrenze, falsch kommt in anderer
   assert.ok(s.aufgabenZahl <= E.blockMaxAufgaben);
 });
 
+test('Beispiel: vorgerechnete Aufgabe kommt weder «ohne Hilfe» noch «nochmals»; Hinweis «andere Form» stimmt', () => {
+  for (const z of [0, 0.3, 0.6, 0.99]) {
+    const p = testpaket();
+    const s = new Sitzung(p, leeresModell('test'), { uhr: () => t0, zufall: () => z });
+    const vorgerechnet = new Map(), gezeigt = [];
+    let a;
+    while ((a = s.naechster())) {
+      const ph = a.schritt.phase, g = a.aufgabe.variantengruppe;
+      if (ph === 'beispiel') { assert.equal(a.zeigeVorgerechnet, true); vorgerechnet.set(a.schritt.lernziel, g); s.weiter(); continue; }
+      if (ph === 'neu' || ph === 'nochmals') assert.notEqual(g, vorgerechnet.get(a.schritt.lernziel), `${ph} bringt das Beispiel (zufall ${z})`);
+      // «ohne Hilfe» falsch: mit nur 2 Gruppen ist keine neue Form mehr übrig (Beispiel gesperrt, die andere schon benutzt)
+      const r = s.antworte(ph === 'neu' ? falscheNr(a.instanz) : richtigeNr(a.instanz));
+      if (ph === 'neu') assert.equal(r.nochmals, 'gleicheForm');
+      if (ph === 'mitHilfe' || ph === 'nochmals') assert.equal(r.nochmals, null);
+      gezeigt.push(ph);
+    }
+    assert.ok(gezeigt.includes('nochmals'));
+  }
+});
+
+test('Beispiel: Lernziel mit nur einer Variantengruppe zeigt keine vorgerechnete Aufgabe', () => {
+  const p = testpaket();
+  p.aufgaben = p.aufgaben.filter(a => !a.id.endsWith('y'));
+  const s = new Sitzung(p, leeresModell('test'), { uhr: () => t0, zufall: () => 0.5 });
+  let a, beispiele = 0;
+  while ((a = s.naechster())) {
+    if (a.schritt.phase === 'beispiel') { beispiele++; assert.equal(a.zeigeVorgerechnet, false); s.weiter(); } else s.antworte(richtigeNr(a.instanz));
+  }
+  assert.ok(beispiele > 0);
+});
+
+test('Nochmals: «in anderer Form» nur, wenn eine unbenutzte Variante existiert', () => {
+  const p = testpaket();
+  let m = leeresModell('test');
+  for (const l of p.lernziele) m = verbuche(m, l.id, { punkte: 1 }, t0);
+  const s = new Sitzung(p, m, { uhr: () => new Date(+t0 + 30 * TAG), zufall: () => 0.5 });
+  const a = s.naechster();
+  assert.equal(s.antworte(falscheNr(a.instanz)).nochmals, 'andereForm');
+  const einzeln = testpaket();
+  einzeln.aufgaben = einzeln.aufgaben.filter(x => !x.id.endsWith('y'));
+  const s2 = new Sitzung(einzeln, m, { uhr: () => new Date(+t0 + 30 * TAG), zufall: () => 0.5 });
+  const b = s2.naechster();
+  assert.equal(s2.antworte(falscheNr(b.instanz)).nochmals, 'gleicheForm');
+});
+
+test('Hinweisleiter: Zahl mit weiteren Versuchen, nur der erste zählt für FSRS; MC ohne zweiten Versuch', () => {
+  const p = testpaket();
+  p.aufgaben.find(a => a.id === 'A1x').typ = 'zahl';
+  Object.assign(p.aufgaben.find(a => a.id === 'A1x'), { wert: 10, einheit: 'J', optionen: undefined });
+  let m = leeresModell('test');
+  for (const l of p.lernziele) m = verbuche(m, l.id, { punkte: 1 }, t0);
+  const spaeter = new Date(+t0 + 30 * TAG);
+  const s = new Sitzung(p, m, { uhr: () => spaeter, zufall: () => 0 });
+  let a = s.naechster();
+  while (a.aufgabe.id !== 'A1x') { s.antworte(richtigeNr(a.instanz)); a = s.naechster(); }
+  const vorher = s.modell.lernziele.A1;
+  const r1 = s.antworte('3');
+  assert.deepEqual([r1.versuch, r1.hilfsstufe, r1.nochVersuch, r1.fertig], [1, 1, true, false]);
+  const nachErstem = s.modell.lernziele.A1;
+  assert.notDeepEqual(nachErstem.karte, vorher.karte, 'erster Versuch zählt');
+  const r2 = s.antworte('4');
+  assert.deepEqual([r2.versuch, r2.hilfsstufe, r2.nochVersuch], [2, 2, true]);
+  const r3 = s.antworte('10');
+  assert.deepEqual([r3.versuch, r3.richtig, r3.fertig, r3.xp], [3, true, true, E.xp.nachHinweis]);
+  assert.deepEqual(s.modell.lernziele.A1, nachErstem, 'spätere Versuche ändern das Modell nicht');
+  const eintraege = s.protokoll.filter(x => x.aufgabe === 'A1x');
+  assert.equal(eintraege.length, 1, 'ein Eintrag pro Aufgabe');
+  assert.deepEqual([eintraege[0].richtig, eintraege[0].versuch, eintraege[0].hilfsstufe, eintraege[0].richtigAmEnde], [false, 3, 2, true]);
+  assert.equal(s.offen.filter(x => x.lernziel === 'A1' && x.phase === 'nochmals').length, 1, 'nochmals nach erstem Fehler, nur einmal');
+  // Nach drei Fehlern: Lösung (Stufe 3), keine weiteren Versuche
+  const s2 = new Sitzung(p, m, { uhr: () => spaeter, zufall: () => 0 });
+  a = s2.naechster();
+  while (a.aufgabe.id !== 'A1x') { s2.antworte(richtigeNr(a.instanz)); a = s2.naechster(); }
+  s2.antworte('1'); s2.antworte('2');
+  const r = s2.antworte('3');
+  assert.deepEqual([r.hilfsstufe, r.nochVersuch, r.fertig], [3, false, true]);
+  // MC: ein Versuch, danach Lösung
+  const mc = s2.naechster();
+  const rm = s2.antworte(falscheNr(mc.instanz));
+  assert.deepEqual([rm.versuch, rm.hilfsstufe, rm.nochVersuch, rm.fertig], [1, 3, false, true]);
+  assert.equal(s2.ergebnisse.length, s2.protokoll.length, 'Pausenhinweis zählt jede Aufgabe einmal');
+});
+
 function grossesPaket() {
   const p = testpaket();
   for (let n = 0; n < 30; n++) {

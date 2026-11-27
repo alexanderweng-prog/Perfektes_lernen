@@ -38,7 +38,11 @@ export const EINSTELLUNGEN = Object.freeze({
   // Lernstand-Anzeige
   sitztAbStabilitaetTage: 7,  // Annahme: «sitzt», wenn die Erinnerung mind. eine Woche hält
 
+  // Hinweisleiter nach einem Fehler: so viele Versuche pro Aufgabentyp (fehlt = 1, danach Lösung).
+  // Zahl: 1. Versuch → Denkanstoss → 2. Versuch → Hilfe → 3. Versuch → Lösung (Annahme). Für FSRS zählt nur der erste.
+  maxVersuche: { zahl: 3 },
+
   // Belohnungen
-  xp: { faellig: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, blockFertig: 20 },
+  xp: { faellig: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, nachHinweis: 2, blockFertig: 20 },
   bonusWahrscheinlichkeit: 0.25 // variable Belohnung nach einer Sitzung
 });
