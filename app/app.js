@@ -54,6 +54,15 @@ async function ladePaket(id) {
   speichern();
 }
 
+// Kapitel, die das Kind sieht: in einer Klasse nur die von der Lehrperson freigeschalteten
+const sichtbar = p => !p.versteckt && (!K.erlaubteKapitel() || K.erlaubteKapitel().includes(p.id));
+const kapitelGesperrt = () => !!K.erlaubteKapitel() && !K.erlaubteKapitel().includes(paket.id);
+// Passendes Kapitel wählen: Wunsch, wenn erlaubt, sonst das erste freigeschaltete
+function kapitelFuer(wunsch) {
+  const erlaubt = K.erlaubteKapitel();
+  return !erlaubt || erlaubt.includes(wunsch) || !erlaubt.length ? wunsch : erlaubt[0];
+}
+
 /* ---------- Bausteine ---------- */
 const kontoChip = () => K.konto ? `<div style="display:flex;align-items:center;gap:8px"><span class="small" style="color:var(--header-muted)">${esc(K.konto.pseudonym)}</span><button class="btn sm" data-act="abmelden">${K.konto.modus === 'schule' ? 'Abmelden' : 'Wechseln'}</button></div>` : '';
 const kopf = (titel, lead, extra = '') => `<header class="top"><div class="toprow"><div class="logochip"><img src="logo.png" alt="Sekundarschule Halingen"></div>${extra}</div>
@@ -77,7 +86,10 @@ function startHtml() {
   const neu = lz.filter(l => istNeu(daten.modell, l.id)).length;
   const zaehl = { neu: 0, wackelt: 0, sitzt: 0 };
   lz.forEach(l => zaehl[status(daten.modell, l.id, jetzt)]++);
-  const block = faellig || neu
+  const block = kapitelGesperrt()
+    ? `<p><b>${K.erlaubteKapitel().length ? 'Dieses Kapitel ist für deine Klasse im Moment nicht freigeschaltet.' : 'Deine Lehrperson hat im Moment kein Kapitel freigeschaltet.'}</b></p>
+       <p class="small">${K.erlaubteKapitel().length ? 'Wähle unten unter «Einstellungen» ein freigeschaltetes Kapitel.' : 'Sobald sie eines freischaltet, kannst du hier üben.'}</p>`
+    : faellig || neu
     ? `<div class="kpis"${E.schalter.serie ? '' : ' style="grid-template-columns:repeat(2,minmax(0,1fr))"'}><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div>${E.schalter.serie ? `<div><b>${daten.serie.wert}</b><span class="small">Serie</span></div>` : ''}</div>
        <p style="margin:var(--space-3) 0">${faellig ? 'Zuerst kommen die fälligen Lernziele, danach höchstens ' + E.blockMaxNeueLernziele + ' neue.' : 'Heute ist nichts fällig. Du lernst ' + Math.min(neu, E.blockMaxNeueLernziele) + ' neue Lernziele kennen.'}</p>
        <button class="btn btn-primary block" data-act="block">Wiederholungsblock starten</button>
@@ -93,7 +105,7 @@ function startHtml() {
       <div class="tri3" aria-hidden="true"><span class="s" style="width:${p(z.sitzt)}"></span><span class="w" style="width:${p(z.wackelt)}"></span><span class="n" style="width:${p(z.neu)}"></span></div>
       <ul class="lzlist">${li}</ul></details>`;
   }).join('');
-  const optionen = PAKETE.filter(p => !p.versteckt || p.id === paket.id).map(p => `<option value="${p.id}" ${p.id === paket.id ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
+  const optionen = PAKETE.filter(p => sichtbar(p) || p.id === paket.id).map(p => `<option value="${p.id}" ${p.id === paket.id ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
   const freigabe = paket.kompetenzen.map(k => `<label><input type="checkbox" data-act="freigabe" value="${k.id}" ${!daten.freigabe.length || daten.freigabe.includes(k.id) ? 'checked' : ''}> ${esc(k.titel)}</label>`).join('');
   const bonus = E.schalter.bonus && daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
   const wertungHtml = E.schalter.klassenwertung && wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
@@ -307,7 +319,7 @@ function endeHtml() {
       ${stufeHtml()}</section>
     ${ui.bonus ? `<section class="card"><div class="bonus">${ui.bonus.icon}</div><p><b>Bonus-Trophäe: ${esc(ui.bonus.name)}</b></p><p class="small">Bonus-Trophäen kommen ab und zu, einfach so.</p></section>` : ''}
     <section class="card"><div class="tag">Fällig beim nächsten Mal</div><p>${zaehleFaellige(paket, daten.modell, { jetzt: new Date(+jetzt + 86400000), freigabe: daten.freigabe })} Lernziele bis morgen.</p></section>
-    ${neuUebrig && !ui.speichert ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt Neues und Simulationen. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock starten</button></section>` : ''}
+    ${neuUebrig && !ui.speichert && !kapitelGesperrt() ? `<section class="card"><p><b>Noch Lust?</b> Der Zusatzblock bringt Neues und Simulationen. Freiwillig.</p><button class="btn block" data-act="zusatz">Zusatzblock starten</button></section>` : ''}
     ${ui.speichert ? '<p class="small">Wird gespeichert …</p>' : syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)}</div></div>` : K.konto.modus === 'schule' ? '<p class="small">Gespeichert.</p>' : ''}
     ${K.konto.geteilt
       ? `<button class="btn btn-primary block" data-act="abmelden" ${ui.speichert ? 'disabled' : ''}>Fertig und abmelden</button><p class="small">Gemeinsames Gerät: Melde dich ab, damit das nächste Kind mit seinem eigenen Lernstand übt.</p><button class="btn block" data-act="start">Zur Übersicht</button>`
@@ -419,7 +431,7 @@ $app.addEventListener('click', e => {
   stoppeVorlesen();
   if (act === 'block') starteSitzung('block');
   else if (act === 'zusatz') starteSitzung('zusatz');
-  else if (act === 'start') { ui = {}; render(); ladeWertung(); }
+  else if (act === 'start') { ui = {}; render(); pruefeKapitel().then(ladeWertung); }
   else if (act === 'abmelden') abmelden(false);
   else if (act === 'abmeldenTrotzdem') abmelden(true);
   else if (act === 'anmelden') anmeldenKlick();
@@ -486,7 +498,21 @@ async function oeffne() {
   catch (err) { $app.innerHTML = `<main class="wrap"><p>Das Thema konnte nicht geladen werden: ${esc(err.message)}</p></main>`; return; }
   ui = {}; render();
   if (K.konto && K.konto.modus === 'schule' && (daten.ausstehend.antworten.length || daten.ausstehend.sitzungen.length)) { await sync(); render(); }
+  await pruefeKapitel();
   ladeWertung();
+}
+
+// Kapitel der Klasse neu holen (die Lehrperson kann sie jederzeit ändern) und bei Bedarf auf ein erlaubtes wechseln.
+// Vor dem Wechsel wird noch Offenes gespeichert, damit keine Antworten im ausgeblendeten Kapitel hängen bleiben.
+async function pruefeKapitel() {
+  if (!K.konto || K.konto.modus !== 'schule') return;
+  await K.ladeKapitel();
+  const ziel = kapitelFuer(paket.id);
+  if (ziel !== paket.id) {
+    if (daten.ausstehend.antworten.length || daten.ausstehend.sitzungen.length) await sync();
+    await ladePaket(ziel);
+  }
+  if (!ui.seite) render();
 }
 
 async function ladeWertung() {

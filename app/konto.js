@@ -53,7 +53,7 @@ export async function registrieren(klassencode) {
 export async function anmelden(lerncode, geteilt) {
   const code = lerncode.trim().toLowerCase();
   const r = await rpc('lm_anmelden', { p_code: code });
-  konto = { modus: 'schule', id: 's' + kurzHash(code), lerncode: code, pseudonym: r.pseudonym, team: r.team, geteilt: !!geteilt, zuletzt: Date.now() };
+  konto = { modus: 'schule', id: 's' + kurzHash(code), lerncode: code, pseudonym: r.pseudonym, team: r.team, kapitel: r.kapitel ?? null, geteilt: !!geteilt, zuletzt: Date.now() };
   kontoSpeichern();
   // Lernstand vom Server übernehmen (der Server ist massgebend)
   for (const [paketId, v] of Object.entries(r.lernstand || {})) {
@@ -115,6 +115,15 @@ export async function meineDatenLoeschen() {
   lokaleDatenLoeschen(konto.id);
   konto = null; kontoSpeichern();
 }
+
+// Kapitel, die die Lehrperson für die Klasse freigeschaltet hat (null = alle). Wird bei jedem Öffnen neu geholt,
+// damit Änderungen der Lehrperson sofort gelten; ohne Verbindung gilt der zuletzt bekannte Stand.
+export async function ladeKapitel() {
+  if (!konto || konto.modus !== 'schule') return null;
+  try { konto.kapitel = await rpc('lm_klasse_kapitel', { p_code: konto.lerncode }); kontoSpeichern(); } catch (e) { /* letzter Stand bleibt */ }
+  return konto.kapitel;
+}
+export const erlaubteKapitel = () => (konto && konto.modus === 'schule' && Array.isArray(konto.kapitel) ? konto.kapitel : null);
 
 export async function klassenwertung() {
   if (!konto || konto.modus !== 'schule') return null;
