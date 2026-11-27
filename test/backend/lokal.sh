@@ -20,6 +20,8 @@ P=("$BIN/psql" -h "$DIR" -p "$PORT" -U postgres -d postgres -v ON_ERROR_STOP=1 -
 grep -v 'create extension if not exists pg_cron' backend/schema.sql | "${P[@]}"
 "${P[@]}" -f backend/freigaben.sql
 "${P[@]}" -f backend/2026-11-absichern.sql
+"${P[@]}" -f backend/migrationen/2026-11-protokoll-pilot.sql
 "${P[@]}" -f backend/haertung.sql
 "${P[@]}" -t -A -f test/backend/backend_tests.sql | grep -v "^$"
+"${P[@]}" -t -A -f test/backend/protokoll_tests.sql | grep -v "^$"
 echo "Alle Backend-Tests bestanden."

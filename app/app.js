@@ -13,7 +13,8 @@ import { lies, stoppeVorlesen, vorlesenLaeuft, vorlesenMoeglich } from './vorles
 
 const PAKETE = [...KATALOG, { id: 'demo-formate', titel: 'Demo: alle Aufgabenformate', kapitel: 'Demo', datei: './demo-formate.js', versteckt: true }];
 const SYNC_ALLE = 5; // nach so vielen Antworten im Hintergrund speichern
-const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals', simulation: 'Simulation' };
+const APP_VERSION = '2026-11-27'; // bei jeder Veröffentlichung anpassen, landet in jedem Protokolleintrag
+const PHASE = { faellig: 'Wiederholen', beispiel: 'Neu · Beispiel', mitHilfe: 'Neu · mit Hilfe', neu: 'Neu · ohne Hilfe', nochmals: 'Nochmals', kontrolle: 'Wiederholen', simulation: 'Simulation' };
 const STATUS = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt' };
 
 const $app = document.getElementById('app');
@@ -64,7 +65,7 @@ const fuss = () => `<footer class="foot"><div class="logochip"><img src="logo.pn
     : 'Dein Lernstand wird nur auf diesem Gerät im Browser gespeichert.'}</p></footer>`;
 
 function stufeHtml() {
-  return `<div class="row"><span class="small">Stufe ${stufe(daten.xp)} · ${daten.xp} XP</span><span class="small">Serie ${daten.serie.wert} ${daten.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span></div>
+  return `<div class="row"><span class="small">Stufe ${stufe(daten.xp)} · ${daten.xp} XP</span>${E.schalter.serie ? `<span class="small">Serie ${daten.serie.wert} ${daten.serie.wert === 1 ? 'Übungstag' : 'Übungstage'}</span>` : ''}</div>
     <div class="xpbar light"><div style="width:${Math.round(fortschrittStufe(daten.xp) * 100)}%"></div></div>`;
 }
 
@@ -77,7 +78,7 @@ function startHtml() {
   const zaehl = { neu: 0, wackelt: 0, sitzt: 0 };
   lz.forEach(l => zaehl[status(daten.modell, l.id, jetzt)]++);
   const block = faellig || neu
-    ? `<div class="kpis"><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div><div><b>${daten.serie.wert}</b><span class="small">Serie</span></div></div>
+    ? `<div class="kpis"${E.schalter.serie ? '' : ' style="grid-template-columns:repeat(2,minmax(0,1fr))"'}><div><b>${faellig}</b><span class="small">fällig</span></div><div><b>${neu}</b><span class="small">neu</span></div>${E.schalter.serie ? `<div><b>${daten.serie.wert}</b><span class="small">Serie</span></div>` : ''}</div>
        <p style="margin:var(--space-3) 0">${faellig ? 'Zuerst kommen die fälligen Lernziele, danach höchstens ' + E.blockMaxNeueLernziele + ' neue.' : 'Heute ist nichts fällig. Du lernst ' + Math.min(neu, E.blockMaxNeueLernziele) + ' neue Lernziele kennen.'}</p>
        <button class="btn btn-primary block" data-act="block">Wiederholungsblock starten</button>
        <p class="small">Höchstens ${E.blockMaxAufgaben} Aufgaben oder ca. ${E.blockMaxMinuten} Minuten. Kürzer ist auch gut.</p>`
@@ -94,8 +95,8 @@ function startHtml() {
   }).join('');
   const optionen = PAKETE.filter(p => !p.versteckt || p.id === paket.id).map(p => `<option value="${p.id}" ${p.id === paket.id ? 'selected' : ''}>${esc(p.titel)} (${esc(p.kapitel)})</option>`).join('');
   const freigabe = paket.kompetenzen.map(k => `<label><input type="checkbox" data-act="freigabe" value="${k.id}" ${!daten.freigabe.length || daten.freigabe.includes(k.id) ? 'checked' : ''}> ${esc(k.titel)}</label>`).join('');
-  const bonus = daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
-  const wertungHtml = wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
+  const bonus = E.schalter.bonus && daten.bonus.length ? `<p class="small">Bonus-Trophäen: ${daten.bonus.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(' ')}</p>` : '';
+  const wertungHtml = E.schalter.klassenwertung && wertung && wertung.length ? `<section class="card"><div class="tag">Klassenduell diese Woche</div>
       <p class="small">Gewertet wird, welcher Anteil der Klasse den Wiederholungsblock gemacht hat.</p>
       <ol class="lzlist">${wertung.slice(0, 8).map(w => `<li${w.eigene ? ' style="font-weight:800"' : ''}><span>${esc(w.team)}${w.eigene ? ' (deine Klasse)' : ''}</span><span class="mono">${Math.round((w.anteil || 0) * 100)} %</span></li>`).join('')}</ol></section>` : '';
   const syncHtml = syncFehler ? `<div class="fb warn"><div class="fbb">Noch nicht gespeichert: ${esc(syncFehler)} Das wird nachgeholt.</div></div>` : '';
@@ -297,7 +298,7 @@ function starteSimulation(laufend) {
 
 /* ---------- Ablauf ---------- */
 function starteSitzung(art) {
-  sitzung = new Sitzung(paket, daten.modell, { art, freigabe: daten.freigabe });
+  sitzung = new Sitzung(paket, daten.modell, { art, freigabe: daten.freigabe, appVersion: APP_VERSION });
   ui = { seite: 'runde' };
   naechste();
 }
@@ -393,7 +394,7 @@ $app.addEventListener('click', e => {
   else if (act === 'loesung') { ui.loesungGezeigt = true; render(); }
   else if (act === 'sicher') { ui.sicherheit = b.dataset.v; werte(); }
   else if (act === 'weiter') {
-    if (sitzung.aktuell.schritt.phase === 'beispiel') { sitzung.weiter(); return naechste(); }
+    if (sitzung.aktuell.schritt.phase === 'beispiel') { daten.ausstehend.antworten.push(sitzung.weiter()); speichern(); return naechste(); }
     if (ui.pauseFolgt) { ui.pause = true; ui.pauseFolgt = false; return render(); }
     naechste();
   }
@@ -437,6 +438,7 @@ async function oeffne() {
 }
 
 async function ladeWertung() {
+  if (!E.schalter.klassenwertung) { wertung = null; return; } // ausgeschaltet: gar nicht erst beim Server abfragen
   try { wertung = await K.klassenwertung(); } catch (e) { wertung = null; }
   if (K.konto && !ui.seite) render();
 }

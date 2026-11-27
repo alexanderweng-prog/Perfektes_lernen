@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs';
 // Tests für den Lern-Motor. Aufruf: node --test test/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EINSTELLUNGEN as E } from '../motor/einstellungen.js';
+import { EINSTELLUNGEN as E, EINSTELLUNGEN_VERSION } from '../motor/einstellungen.js';
 import { bewerte, leseZahl } from '../motor/bewerten.js';
 import { instanz, pruefePaket } from '../motor/format.js';
 import { leeresModell, verbuche, status, istFaellig, passeNiveauAn, bewertungFuer, Rating } from '../motor/schuelermodell.js';
-import { Sitzung, pauseNoetig, verzahne, zaehleFaellige } from '../motor/sitzung.js';
-import { aktualisiereSerie, leereSerie } from '../motor/belohnung.js';
+import { Sitzung, pauseNoetig, verzahne, zaehleFaellige, kontrolleStichtag } from '../motor/sitzung.js';
+import { aktualisiereSerie, leereSerie, zieheBonus } from '../motor/belohnung.js';
 import { KATALOG } from '../pakete/katalog.js';
 import { ergaenze, ladeErgaenzung } from '../pakete/ergaenze.js';
 
@@ -217,6 +217,73 @@ test('Hinweisleiter: Zahl mit weiteren Versuchen, nur der erste zählt für FSRS
   const rm = s2.antworte(falscheNr(mc.instanz));
   assert.deepEqual([rm.versuch, rm.hilfsstufe, rm.nochVersuch, rm.fertig], [1, 3, false, true]);
   assert.equal(s2.ergebnisse.length, s2.protokoll.length, 'Pausenhinweis zählt jede Aufgabe einmal');
+});
+
+test('Protokoll: vorhergesagte Abrufwahrscheinlichkeit, Zeit im Beispiel, Versionen', () => {
+  const p = testpaket();
+  let zeit = +t0;
+  const uhr = () => new Date(zeit);
+  const s = new Sitzung(p, leeresModell('test'), { uhr, zufall: () => 0.5, appVersion: 'test-1' });
+  let a, beispiel = null;
+  while ((a = s.naechster())) {
+    zeit += 30000;
+    if (a.schritt.phase === 'beispiel') { const e = s.weiter(); beispiel = beispiel || e; } else s.antworte(richtigeNr(a.instanz));
+  }
+  assert.deepEqual([beispiel.phase, beispiel.typ, beispiel.dauerMs, beispiel.app, beispiel.einstellungen], ['beispiel', 'beispiel', 30000, 'test-1', EINSTELLUNGEN_VERSION]);
+  assert.ok(s.protokoll.includes(beispiel), 'Beispiel steht im Protokoll');
+  const antworten = s.protokoll.filter(x => x.phase !== 'beispiel');
+  assert.ok(antworten.length && antworten.every(x => x.pVorher === null && x.app === 'test-1'), 'neue Lernziele: noch keine Vorhersage');
+  assert.equal(s.abschliessen().einstellungen, EINSTELLUNGEN_VERSION);
+  // Fällige Lernziele: Vorhersage zwischen 0 und 1
+  const s2 = new Sitzung(p, s.modell, { uhr: () => new Date(+t0 + 20 * TAG), zufall: () => 0.5 });
+  const f = s2.naechster();
+  s2.antworte(richtigeNr(f.instanz));
+  const pv = s2.protokoll[0].pVorher;
+  assert.ok(f.schritt.phase === 'faellig' && pv > 0 && pv < 1, 'pVorher ' + pv);
+  assert.match(EINSTELLUNGEN_VERSION, /^e[0-9a-z]+$/);
+});
+
+test('Kontrollfragen: fester Abstand, ändern weder Planer noch Niveau, im Protokoll markiert', () => {
+  const p = testpaket();
+  let m = leeresModell('test');
+  for (const l of p.lernziele) m = verbuche(m, l.id, { punkte: 1 }, t0);
+  m.lernziele.A1 = { ...m.lernziele.A1, kontrolle: { ab: t0.toISOString(), offen: [14, 28] } };
+  assert.equal(kontrolleStichtag(m, 'A1', new Date(+t0 + 13 * TAG)), null, 'vor dem Stichtag');
+  assert.equal(kontrolleStichtag(m, 'A1', new Date(+t0 + 30 * TAG)), 28, 'Stichtag 14 verpasst, 28 gilt');
+  assert.equal(kontrolleStichtag(m, 'A1', new Date(+t0 + 36 * TAG)), null, 'nach dem Fenster verfallen');
+  const tag15 = new Date(+t0 + 15 * TAG);
+  const s = new Sitzung(p, m, { uhr: () => tag15, zufall: () => 0.5 });
+  assert.equal(s.offen.filter(x => x.lernziel === 'A1').map(x => x.phase).join(), 'kontrolle', 'A1 nur als Kontrollfrage, nicht zusätzlich fällig');
+  let a = s.naechster();
+  while (a.schritt.phase !== 'kontrolle') { s.antworte(richtigeNr(a.instanz)); a = s.naechster(); }
+  const vorher = s.modell;
+  const r = s.antworte(falscheNr(a.instanz));
+  assert.equal(r.nochmals, null, 'keine Wiederholung nach einer Kontrollfrage');
+  const e = s.modell.lernziele.A1;
+  assert.deepEqual([e.karte, e.richtig, e.falsch], [vorher.lernziele.A1.karte, vorher.lernziele.A1.richtig, vorher.lernziele.A1.falsch], 'Planer und Zähler unverändert');
+  assert.deepEqual([s.modell.niveau, s.modell.verlauf], [vorher.niveau, vorher.verlauf], 'Niveau unverändert');
+  assert.deepEqual(e.kontrolle.offen, [28]);
+  const eintragK = s.protokoll.at(-1);
+  assert.deepEqual([eintragK.phase, eintragK.kontrolle, eintragK.kontrolleIst, eintragK.richtig], ['kontrolle', 14, 15, false]);
+  assert.ok(s.protokoll.filter(x => x.phase !== 'kontrolle').every(x => x.kontrolle === null));
+});
+
+test('Kontrollfragen: Auswahl beim ersten Abruf ohne Hilfe', () => {
+  const lauf = z => {
+    const s = new Sitzung(testpaket(), leeresModell('test'), { uhr: () => t0, zufall: () => z });
+    let a;
+    while ((a = s.naechster())) { if (a.schritt.phase === 'beispiel') s.weiter(); else s.antworte(richtigeNr(a.instanz)); }
+    return Object.values(s.modell.lernziele).filter(e => e.kontrolle);
+  };
+  const gewaehlt = lauf(0);
+  assert.equal(gewaehlt.length, E.blockMaxNeueLernziele);
+  assert.deepEqual(gewaehlt[0].kontrolle, { ab: t0.toISOString(), offen: E.kontrolle.tage });
+  assert.equal(lauf(0.99).length, 0, 'zufall über dem Anteil: keine Kontrollfrage');
+});
+
+test('Schalter: Klassenwertung standardmässig aus, Bonus und Serie an', () => {
+  assert.deepEqual(E.schalter, { serie: true, klassenwertung: false, bonus: true });
+  assert.ok(zieheBonus({ abrufe: 3 }, () => 0), 'Bonus an: kann gezogen werden');
 });
 
 function grossesPaket() {

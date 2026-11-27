@@ -50,7 +50,7 @@ export const BONUS = [
   { id: 'blitz', icon: '⚡', name: 'Blitz' }
 ];
 export function zieheBonus(zusammenfassung, zufall = Math.random) {
-  if (!zusammenfassung.abrufe || zufall() >= E.bonusWahrscheinlichkeit) return null;
+  if (!E.schalter.bonus || !zusammenfassung.abrufe || zufall() >= E.bonusWahrscheinlichkeit) return null;
   return BONUS[Math.floor(zufall() * BONUS.length)];
 }
 

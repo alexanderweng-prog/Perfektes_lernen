@@ -35,6 +35,15 @@ export const EINSTELLUNGEN = Object.freeze({
   pauseUeberSchnitt: 0.3,     // … und mindestens 30 Prozentpunkte über dem bisherigen Schnitt
   // Nach dem Hinweis zählen Fehler schwächer: «falsch» wird für FSRS als «schwer» gewertet (Annahme)
 
+  // Kontrollfragen für die Pilot-Messung: Ein kleiner Teil der neu gelernten Lernziele wird zusätzlich
+  // nach festem Abstand abgefragt (unabhängig von FSRS). Zählt nicht für Planer und Niveau.
+  kontrolle: {
+    anteil: 0.1,                // Annahme: jedes zehnte neue Lernziel; 0 = aus
+    tage: [14, 28],             // Abstand ab dem ersten Abruf ohne Hilfe
+    fensterTage: 7,             // so lange nach dem Stichtag gilt die Frage noch, danach verfällt sie
+    maxProBlock: 2              // höchstens so viele Kontrollfragen pro Wiederholungsblock
+  },
+
   // Lernstand-Anzeige
   sitztAbStabilitaetTage: 7,  // Annahme: «sitzt», wenn die Erinnerung mind. eine Woche hält
 
@@ -43,6 +52,19 @@ export const EINSTELLUNGEN = Object.freeze({
   maxVersuche: { zahl: 3 },
 
   // Belohnungen
-  xp: { faellig: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, nachHinweis: 2, blockFertig: 20 },
-  bonusWahrscheinlichkeit: 0.25 // variable Belohnung nach einer Sitzung
+  xp: { faellig: 10, kontrolle: 10, neu: 8, mitHilfe: 4, nochmals: 3, simulation: 5, nachHinweis: 2, blockFertig: 20 },
+  bonusWahrscheinlichkeit: 0.25, // variable Belohnung nach einer Sitzung
+  // Schalter für Belohnungen (Pilot): aus = für das Kind nirgends sichtbar
+  schalter: {
+    serie: true,                // Serie mit Schonfrist
+    klassenwertung: false,      // Klassenduell (Rangfolge der Klassen der Schule)
+    bonus: true                 // zufällige Bonus-Trophäe nach der Sitzung
+  }
 });
+
+// Kennung der Einstellungen fürs Protokoll: ändert sich automatisch, sobald ein Wert oben geändert wird
+export const EINSTELLUNGEN_VERSION = (() => {
+  let h = 0;
+  for (const c of JSON.stringify(EINSTELLUNGEN)) h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+  return 'e' + h.toString(36);
+})();
